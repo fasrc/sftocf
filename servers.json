@@ -1,0 +1,10 @@
+
+{
+  "servername": {
+    "url":"https://my_url.edu",
+    "volumes":{
+      "volumename1":["pathname"],
+      "volumename2":["pathname"]
+    }
+  }
+}
