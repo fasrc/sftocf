@@ -11,10 +11,9 @@ from django.utils import timezone
 from django.contrib.auth import get_user_model
 
 from coldfront.core.utils.common import import_from_settings
-from coldfront.core.project.models import Project, ProjectUser
+from coldfront.core.project.models import Project
 from coldfront.core.allocation.models import (Allocation,
                                             AllocationUser,
-                                            AllocationAttribute,
                                             AllocationUserStatusChoice)
 
 datestr = datetime.today().strftime("%Y%m%d")
@@ -117,15 +116,25 @@ class StarFishServer:
         member_list = return_get_json(url, self.headers)
         return member_list
 
-    @record_process
-    def get_vol_user_name_ids(self, volume):
-        usermap_url = self.api_url + "mapping/user?volume_name=" + volume
-        users = return_get_json(usermap_url, self.headers)
-        userdict = {u["uid"]: u["name"] for u in users}
-        return userdict
 
 
 class StarFishQuery:
+    """
+
+    Attributes
+    ----------
+    api_url : str
+    headers : dict
+    query_id : str
+    result : list
+
+    Methods
+    -------
+    post_async_query(query, group_by, volpath)
+    return_results_once_prepared(sec=3)
+    return_query_result()
+    """
+
     def __init__(self, headers, api_url, query, group_by, volpath, sec=3):
         self.api_url = api_url
         self.headers = headers
@@ -134,6 +143,8 @@ class StarFishQuery:
 
     @record_process
     def post_async_query(self, query, group_by, volpath):
+        """Post an asynchronous query through the Starfish API.
+        """
         query_url = self.api_url + "async/query/"
 
         params = {
@@ -152,13 +163,15 @@ class StarFishQuery:
             "humanize_nested": "false",
             "mount_agent": "None",
         }
-        r = requests.post(query_url, params=params, headers=self.headers)
-        response = r.json()
+        req = requests.post(query_url, params=params, headers=self.headers)
+        response = req.json()
         logger.debug("response: %s", response)
         return response["query_id"]
 
     @record_process
     def return_results_once_prepared(self, sec=3):
+        """Wait for posted query to return result.
+        """
         while True:
             query_check_url = self.api_url + "async/query/" + self.query_id
             response = return_get_json(query_check_url, self.headers)
@@ -168,12 +181,27 @@ class StarFishQuery:
             time.sleep(sec)
 
     def return_query_result(self):
+        """Go to link for query result and return the JSON.
+        """
         query_result_url = self.api_url + "async/query_result/" + self.query_id
         response = return_get_json(query_result_url, self.headers)
         return response
 
 
 class ColdFrontDB:
+    """
+
+    Attributes
+    ----------
+
+    Methods
+    -------
+    produce_lab_dict(self, vol)
+    check_volume_collection(self, lr, homepath="./coldfront/plugins/sftocf/data/")
+    pull_sf(self, volume=None)
+    push_cf(self, filepaths, clean)
+    update_usage(self, user, userdict, allocation)
+    """
 
     @record_process
     def produce_lab_dict(self, vol):
@@ -197,8 +225,8 @@ class ColdFrontDB:
                 pr_dict[proj_name] = resource_list
             else:
                 pr_dict[proj_name].extend(resource_list)
-        lr = pr_dict if not vol else {p:[i for i in r if vol in i] for p, r in pr_dict.items()}
-        labs_resources = {p:[tuple(rs.split("/")) for rs in r] for p, r in lr.items()}
+        lab_res = pr_dict if not vol else {p:[i for i in r if vol in i] for p, r in pr_dict.items()}
+        labs_resources = {p:[tuple(rs.split("/")) for rs in r] for p, r in lab_res.items()}
         logger.debug("labs_resources:\n%s", labs_resources)
         return labs_resources
 
@@ -249,9 +277,9 @@ class ColdFrontDB:
         Return a set of produced filepaths.
         """
         # 1. produce dict of all labs to be collected & volumes on which their data is located
-        lr = self.produce_lab_dict(volume)
+        lab_res = self.produce_lab_dict(volume)
         # 2. produce list of files collected & list of lab/volume/filename tuples to collect
-        filepaths, to_collect = self.check_volume_collection(lr)
+        filepaths, to_collect = self.check_volume_collection(lab_res)
         # 3. produce set of all volumes to be queried
         vol_set = {i[1] for i in to_collect}
         servers_vols = [(k, vol) for k, v in svp.items() for vol in vol_set if vol in v['volumes']]
@@ -272,8 +300,8 @@ class ColdFrontDB:
         Iterate through JSON files in the filepaths list and insert the data
         into the database.
         """
-        for f in filepaths:
-            content = read_json(f)
+        for file in filepaths:
+            content = read_json(file)
             usernames = [d['username'] for d in content['contents']]
             resource = content['volume'] + "/" + content['tier']
 
@@ -283,22 +311,27 @@ class ColdFrontDB:
 
             project = Project.objects.get(title=content["project"])
             # find project allocation
-            allocations = Allocation.objects.filter(project_id=project.id, resources__name=resource)
+            allocations = Allocation.objects.filter(project=project, resources__name=resource)
             if Allocation.MultipleObjectsReturned.count() > 1:
-                logger.warning("WARNING: Multiple allocations found for project id %s, resource %s. Updating the first.", project.id, resource)
+                logger.warning(' '.join(["WARNING: Multiple allocations found"
+                        "for project id %s, resource %s. Updating the first."]),
+                        project.id, resource)
             allocation = allocations.first()
-            logger.debug(f"{project.title}\nusernames: {usernames}\nuser_models: {[u.username for u in user_models]}")
+            logger.debug("%s\nusernames: %s\nuser_models: %s",
+                    project.title, usernames, [u.username for u in user_models])
 
             for user in user_models:
                 userdict = [d for d in content['contents'] if d["username"] == user.username][0]
                 model = user_models.get(username=userdict["username"])
                 self.update_usage(model, userdict, allocation)
             if clean:
-                os.remove(f)
+                os.remove(file)
         logger.debug("push_cf complete")
 
 
     def update_usage(self, user, userdict, allocation):
+        """Update usage, unit, and usage_bytes values for the designated user.
+        """
         usage, unit = split_num_string(userdict["size_sum_hum"])
         logger.debug("entering for user: %s", user.username)
         try:
@@ -339,16 +372,16 @@ def clean_data_dir(homepath):
             os.remove(fpath)
 
 def write_update_file_line(filepath, patterns):
-    with open(filepath, 'a+') as f:
-        f.seek(0)
+    with open(filepath, 'a+') as file:
+        file.seek(0)
         for pattern in patterns:
-            if not any(pattern == line.rstrip('\r\n') for line in f):
-                f.write(pattern + '\n')
+            if not any(pattern == line.rstrip('\r\n') for line in file):
+                file.write(pattern + '\n')
 
-def split_num_string(x):
-    n = re.search(r"\d*\.?\d+", x).group()
-    s = x.replace(n, "")
-    return n, s
+def split_num_string(string):
+    num = re.search(r"\d*\.?\d+", string).group()
+    size = string.replace(num, "")
+    return num, size
 
 def return_get_json(url, headers):
     """return JSON from the designated url using the designated headers.
@@ -395,10 +428,10 @@ def collect_starfish_usage(server, volume, volumepath, projects):
     datestr = datetime.today().strftime("%Y%m%d")
     locate_or_create_dirpath("./coldfront/plugins/sftocf/data/")
     logger.debug("projects: %s", projects)
-    for t in projects:
-        p = t[0]
-        tier = t[2]
-        filepath = t[3]
+    for project in projects:
+        p = project[0]
+        tier = project[2]
+        filepath = project[3]
         lab_volpath = volumepath[1] if "_l3" in p else volumepath[0]
         logger.debug("filepath: %s lab: %s volpath: %s", filepath, p, lab_volpath)
         usage_query = server.create_query(
@@ -409,7 +442,7 @@ def collect_starfish_usage(server, volume, volumepath, projects):
         if not data:
             logger.warning("No starfish result for lab %s", p)
         elif isinstance(data, dict) and "error" in data:
-            logger.warning("Error in starfish result for lab %s:\n%s",p, data)
+            logger.warning("Error in starfish result for lab %s:\n%s", p, data)
         else:
             data = usage_query.result
             logger.debug(data)
