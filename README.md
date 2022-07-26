@@ -1,4 +1,4 @@
-# sf_to_cf
+# sftocf
 A Coldfront plugin for pulling usage data from Starfish.
 
 This plugin provides a command for collecting usage data from the Starfish API at
@@ -43,7 +43,7 @@ identify the servers and volumes to collect from the Starfish API.
 
 ## Usage
 
-Upon installation, sf_to_cf will add the `pull_sf_push_cf` command to your
+Upon installation, sftocf will add the `pull_sf_push_cf` command to your
 `./manage.py` menu. Running `./manage.py pull_sf_push_cf` will pull usage data for
 project users and save it as JSON in the plugin's data directory, then push that
 data into the Coldfront database. The command can be set to only update one
