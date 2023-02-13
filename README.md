@@ -36,7 +36,11 @@ SFPASS = ENV.str('SFPASS')
 3. In `coldfront.config.settings`, ensure that `'PLUGIN_SFTOCF': 'plugins/sftocf.py',`
 is in the `plugin_configs` dictionary.
 
-4. Fill out the `servers.json` template with the servers and accompanying urls and
+4. In the Coldfront `.env` file, add the following line: 
+
+`PLUGIN_SFTOCF=True`
+
+5. Fill out the `servers.json` template with the servers and accompanying urls and
 volume names that correspond to your Starfish setup. The plugin uses this file to
 identify the servers and volumes to collect from the Starfish API.
 
