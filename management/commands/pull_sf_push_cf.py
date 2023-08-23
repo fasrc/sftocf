@@ -1,14 +1,14 @@
 from coldfront.plugins.sftocf.utils import ColdFrontDB
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 import logging
 
 
 logger = logging.getLogger(__name__)
 
 class Command(BaseCommand):
-    '''
+    """
     Collect usage data from Starfish and insert it into the Coldfront database.
-    '''
+    """
 
     def add_arguments(self, parser):
         parser.add_argument(
