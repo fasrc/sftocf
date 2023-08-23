@@ -1,10 +1,10 @@
 
 {
-  "servername": {
-    "url":"https://my_url.edu",
+  "servername_here": {
+    "url":"https://my_url_here",
     "volumes":{
-      "volumename1":["pathname"],
-      "volumename2":["pathname"]
+      "volumename1_here":["pathname_here"],
+      "volumename2_here":["pathname_here"]
     }
   }
 }

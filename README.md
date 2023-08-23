@@ -22,12 +22,14 @@ PLUGIN_SFTOCF=True
 SFUSER='starfish_username'
 SFPASS='starfish_password'
 ```
+
 2. In `coldfront/config/plugins/`, create file `sftocf.py` with the following contents:
+
 ```py
 from coldfront.config.base import INSTALLED_APPS
 from coldfront.config.env import ENV
 
-INSTALLED_APPS += [ 'coldfront.plugins.sftocf' ]
+INSTALLED_APPS += [ 'coldfront.plugins.sf_to_cf' ]
 
 SFUSER = ENV.str('SFUSER')
 SFPASS = ENV.str('SFPASS')
@@ -54,13 +56,21 @@ data using the `clean` parameter.
 
 ### DjangoQ Integration
 
-You can schedule your Starfish data pull using DjangoQ by adding the following code to
-`coldfront/core/utils/management/commands/add_scheduled_tasks.py`:
+You can schedule your Starfish data pull using DjangoQ by:
 
-      ```py
-      if 'coldfront.plugins.sftocf' in settings.INSTALLED_APPS:
-          schedule('coldfront.plugins.sftocf.tasks.pull_sf_push_cf',
-                  schedule_type=Schedule.WEEKLY,
-                  repeats=-1,
-                  next_run=timezone.now() + datetime.timedelta(days=1))
-      ```
+A. Going to "scheduled tasks" in the adminland DjangoQ section and adding a task
+with the func value of `coldfront.plugins.sftocf.tasks.pull_sf_push_cf` (and then
+adding any further )
+
+B. adding the following code to
+`coldfront/core/utils/management/commands/add_scheduled_tasks.py` and then running
+the add_scheduled_tasks command:
+
+        ```py
+        # adds a task scheduled to run weekly
+        if 'coldfront.plugins.sftocf' in settings.INSTALLED_APPS:
+            schedule('coldfront.plugins.sftocf.tasks.pull_sf_push_cf',
+                    schedule_type=Schedule.WEEKLY,
+                    repeats=-1,
+                    next_run=timezone.now() + datetime.timedelta(days=1))
+        ```
