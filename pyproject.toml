@@ -32,7 +32,7 @@ include = ["sftocf*"]
 sftocf = [
   "servers.json",
   "data/*",
-  "tests/testdata/*",
+  "fixture_data/*",
 ]
 
 [tool.setuptools.dynamic]

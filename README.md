@@ -116,6 +116,15 @@ python -m build
 
 ## Tests
 
+Run from your ColdFront project (with `sftocf` in `INSTALLED_APPS`):
+
 ```bash
 python manage.py test sftocf
 ```
+
+- **`sftocf.tests.test_utils_helpers`** — pure helpers and `AllocationQueryMatch` (no DB).
+- **`sftocf.tests.test_starfish_server`** — `StarFishServer` init/auth with mocks.
+- **`sftocf.tests.test_signals`** — Starfish Django signals.
+- **`sftocf.tests.test_integration`** — optional DB tests using ColdFront factories (requires `coldfront.core.test_helpers` and fixtures).
+
+JSON samples for manual checks live under `sftocf/fixture_data/`.
