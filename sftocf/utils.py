@@ -40,7 +40,7 @@ _PLUGIN_ROOT = Path(__file__).resolve().parent
 DATESTR = datetime.today().strftime('%Y%m%d')
 _DEFAULT_DATAPATH = str(_PLUGIN_ROOT / 'data') + os.sep
 DATAPATH = import_from_settings('SFTOCF_DATAPATH', _DEFAULT_DATAPATH)
-STARFISH_URL = import_from_settings('STARFISH_URL', 'starfish')
+SFURL = import_from_settings('SFURL', 'starfish')
 PENDING_ACTIVE_ALLOCATION_STATUSES = import_from_settings(
     'PENDING_ACTIVE_ALLOCATION_STATUSES', ['Active', 'New', 'In Progress', 'On Hold'])
 
@@ -160,7 +160,7 @@ class StarFishServer:
     """Class for interacting with StarFish REST API.
     """
 
-    def __init__(self, sf_url=STARFISH_URL):
+    def __init__(self, sf_url=SFURL):
         self.name = sf_url
         self.api_url = f'{sf_url}/api/'
         self.token = self.get_auth_token()
@@ -480,7 +480,7 @@ class StarFishServer:
 
 
 class StarFishRedash:
-    def __init__(self, sf_url=STARFISH_URL):
+    def __init__(self, sf_url=SFURL):
         self.base_url = f'{sf_url}/redash/api/'
         self.queries = import_from_settings('REDASH_API_KEYS')
 

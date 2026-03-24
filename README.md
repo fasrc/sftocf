@@ -72,13 +72,14 @@ LOGGING['loggers']['sftocf'] = {
 
 Adjust `filename` to a path your deployment can write.
 
-### Environment toggle (stock ColdFront split-settings)
 
-If you use ColdFront’s **`PLUGIN_SFTOCF`** env flag and the built-in plugin include list, you can keep using `coldfront.config.plugins.sftocf` to load settings from a file. If you **only** use `local_settings.py`, add the variables and `INSTALLED_APPS` there and you do not need `PLUGIN_SFTOCF` or the `sftocf.coldfront_settings` import—unless you still want that include for consistency.
+### Django-Q scheduled tasks
 
-### Reference: `sftocf/coldfront_settings.py`
+Stock ColdFront’s `add_scheduled_tasks` management command **does not** register `sftocf` jobs. After installing this package, register schedules yourself (django-q `Schedule` UI, migrations, or shell), e.g. task paths:
 
-The package still ships `sftocf/coldfront_settings.py` as a **reference** fragment (same keys as above, using `django-environ`’s `ENV` for `SFUSER`, `SFPASS`, `STARFISH_URL`, `SF_VOLUME_MAPPING`). You can copy its contents into `local_settings.py` and adapt paths or logging as needed.
+- `sftocf.tasks.pull_sf_push_cf`
+- `sftocf.tasks.update_zones`
+- `sftocf.tasks.import_allocation_filepaths`
 
 ### Minimal `local_settings.py` sketch
 
@@ -87,7 +88,7 @@ INSTALLED_APPS += ['sftocf']
 
 SFUSER = '...'
 SFPASS = '...'
-STARFISH_URL = 'https://starfish.example.com'  # no trailing slash
+SFURL = 'https://starfish.example.com'  # no trailing slash
 SF_VOLUME_MAPPING = '{"myvol": ["LABS", "LABS"]}'  # JSON string
 
 # Redash: only if you use Redash-backed commands / pipelines
