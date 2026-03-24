@@ -3,7 +3,6 @@ import logging
 
 from django.core.management.base import BaseCommand
 
-from coldfront.core.utils.fasrc import read_json
 from sftocf.utils import RESTDataPipeline, RedashDataPipeline
 
 logger = logging.getLogger(__name__)
