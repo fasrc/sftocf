@@ -9,3 +9,4 @@ SFPASS = import_from_settings('SFPASS')
 class StarFishConfig(AppConfig):
     name = 'sftocf'
     default_auto_field = 'django.db.models.BigAutoField'
+    import sftocf.signals  # noqa: F401

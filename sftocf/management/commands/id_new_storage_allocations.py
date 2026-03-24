@@ -9,7 +9,9 @@ from django.core.management.base import BaseCommand
 
 from coldfront.core.allocation.models import Allocation
 from sftocf.utils import StarFishRedash
+from coldfront.core.utils.common import import_from_settings
 
+SF_IGNORED_GROUP_NAMES = import_from_settings("SFTOCF_IGNORED_GROUP_NAMES", [])
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +26,7 @@ class Command(BaseCommand):
         subdir_results = redash.submit_query('subdirectory')
         data = subdir_results['query_result']['data']['rows']
         # remove entries with no group name or with group names that are not projects
-        data = [entry for entry in data if entry['group_name'] not in
-                [None, 'Domain Users','root', 'bin', 'rc_admin', 'rc_unpriv'] 
+        data = [entry for entry in data if entry['group_name'] not in SF_IGNORED_GROUP_NAMES
                     and 'DISABLED' not in entry['group_name']]
         allocations = [(a.project.title, a.resources.first().name.split('/')[0], a.path)
                         for a in Allocation.objects.all()]
