@@ -108,11 +108,13 @@ Use the **Tier** column to see what applies to your deployment. **Required if us
 | **`SFTOCF_IGNORED_GROUP_NAMES`** | Optional | `[]` | Starfish **group names** (`group_name` from the Redash `subdirectory` query) excluded by **`manage.py id_new_storage_allocations`** when building `local_data/new_allocations.csv`. Rows whose `group_name` contains **`DISABLED`** are always dropped. `import_from_settings('SFTOCF_IGNORED_GROUP_NAMES', [])`. |
 | **`LOGGING`** (sftocf handler/logger) | Optional | — | Extend Django’s **`LOGGING`** dict with a file handler and a logger for the `sftocf` namespace; see [Logging (optional)](#logging-optional). |
 
-#### Example Redash queries
+### Using sftocf with Redash
+
+sftocf can collect the output of Redash queries to collect information that would take a long time to gather and process if using the REST API.
 
 Example Redash SQL used with the keys in **`REDASH_API_KEYS`**:
 
-##### `vol_query`
+#### `vol_query`
 ```sql
 SELECT
     volume.id AS "id",
@@ -130,7 +132,7 @@ FROM sf_reports.stats_current
 ```
 
 
-##### `subdirectory`
+#### `subdirectory`
 ```sql
 /* Return aggregate size of directories that correspond to storage allocations. */
 SELECT 
@@ -160,7 +162,7 @@ ORDER BY
     volume_id, path;
 ```
 
-##### `path_usage_query`
+#### `path_usage_query`
 ```sql
 /*
 Calculate usage per user per allocation directory.
@@ -199,27 +201,6 @@ FROM (
 LEFT JOIN sf_volumes.volume vol ON user_usage.volume_id = vol.id
 LEFT JOIN sf.uid_mapping vol_user ON user_usage.volume_id = vol_user.volume_id AND user_usage.uid = vol_user.uid
 ```
-
-### Logging (optional)
-
-To match the default file logging for this app, extend **`LOGGING`** in `local_settings.py`, for example:
-
-```python
-LOGGING['handlers']['sftocf'] = {
-    'class': 'logging.handlers.TimedRotatingFileHandler',
-    'filename': 'logs/sftocf.log',
-    'when': 'D',
-    'backupCount': 10,
-    'formatter': 'default',
-    'level': 'DEBUG',
-}
-LOGGING['loggers']['sftocf'] = {
-    'handlers': ['sftocf'],
-}
-```
-
-Adjust `filename` to a path your deployment can write.
-
 
 ### Django-Q scheduled tasks
 
