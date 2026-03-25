@@ -1121,5 +1121,10 @@ def update_allocation(sender, **kwargs):
         usage_bytes = int(userdict['size_sum'])
         usage, unit = determine_size_fmt(userdict['size_sum'])
         allocation_query_match.update_user_usage(user, usage_bytes, usage, unit)
+    logger.info(
+        'allocation %s on volume %s updated with usage data; total usage: %s bytes, %s terabytes',
+        allocation.pk, volume_name, allocation_query_match.total_usage_entry['total_size'],
+        allocation_query_match.total_usage_tib
+    )
     if missing_users:
         log_missing('user', missing_users)
