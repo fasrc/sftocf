@@ -11,9 +11,12 @@ from pathlib import Path
 
 from datetime import datetime, timedelta
 
+from django.contrib.auth import get_user_model
 from django.db.models import Q
+from django.dispatch import receiver
 from django.utils import timezone
 
+from coldfront.core.allocation.signals import allocation_activate
 from coldfront.core.utils.common import import_from_settings, uniques_and_intersection
 from coldfront.core.utils.fasrc import (
     read_json,
@@ -1064,8 +1067,12 @@ class RESTDataPipeline(UsageDataPipelineBase):
                     entries.append(entry)
         return entries
 
-def update_allocation_usage_data(allocation_pk):
-    allocation = Allocation.objects.get(pk=allocation_pk)
+
+@receiver(allocation_activate)
+def update_allocation(sender, **kwargs):
+    '''update the allocation data when the allocation is activated.'''
+    logger.debug('allocation_activate signal received')
+    allocation = Allocation.objects.get(pk=kwargs['allocation_pk'])
     volume_name = allocation.resources.first().name.split('/')[0]
     server = StarFishServer()
     if volume_name not in server.volumes:
@@ -1079,7 +1086,9 @@ def update_allocation_usage_data(allocation_pk):
         allocation.project.title, volume_name, allocation.path
     )
     if not allocation_data:
-        raise ValueError('No matching allocation found for the given data: {allocation.project.title}, {volume_name}.')
+        raise ValueError(
+            f'No matching allocation found for the given data: {allocation.project.title}, {volume_name}.'
+        )
 
     subdir_type = AllocationAttributeType.objects.get(name='Subdirectory')
     allocation.allocationattribute_set.get_or_create(
@@ -1095,9 +1104,9 @@ def update_allocation_usage_data(allocation_pk):
     )
 
     allocation_query_match.update_usage_attr(
-        quota_b_attrtype, allocation_query_match.total_usage_entry['total_size'])
+            quota_b_attrtype, allocation_query_match.total_usage_entry['total_size'])
     allocation_query_match.update_usage_attr(
-        quota_size_attrtype, allocation_query_match.total_usage_tib)
+            quota_size_attrtype, allocation_query_match.total_usage_tib)
     missing_users = []
     for userdict in allocation_query_match.user_usage_entries:
         try:
