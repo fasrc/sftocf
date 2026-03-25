@@ -1,0 +1,58 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Packaging / build
+dist/
+build/
+*.egg
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+*.manifest
+*.spec
+
+# Test / type / lint caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Local env & secrets (keep .env.example tracked if you add one)
+.env
+.env.*
+!.env.example
+
+# ColdFront / Django local
+local_settings.py
+*.sqlite3
+logs/
+local_data/
+
+# Plugin runtime outputs (REST pipeline JSON cache under data/)
+sftocf/data/*.json
+
+# Log files anywhere in the repo
+*.log
