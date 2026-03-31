@@ -583,7 +583,7 @@ def return_get_json(url, headers):
     return response.json()
 
 def return_patch_json(url, data, headers):
-    response = requests.patch(url, data=data, headers=headers)
+    response = requests.patch(url, json=data, headers=headers)
     response.raise_for_status()
     return response.json()
 
