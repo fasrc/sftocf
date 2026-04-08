@@ -118,7 +118,7 @@ Example Redash SQL used with the keys in **`REDASH_API_KEYS`**:
 ```sql
 SELECT
     volume.id AS "id",
-    volume.name AS "volume_name",
+    volume.name AS "vol",
     ROUND("total capacity" / POWER(1024.0, 4), 2) AS "capacity_TB",
     ROUND("volume occupied space" / POWER(1024.0, 4), 2) AS "used_physical_TB",
     ROUND("volume occupied space logical" / POWER(1024.0, 4), 2) AS "used_logical_TB",

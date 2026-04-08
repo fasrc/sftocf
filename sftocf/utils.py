@@ -485,7 +485,7 @@ class StarFishRedash:
         self.queries = import_from_settings('REDASH_API_KEYS')
 
     def get_corresponding_coldfront_resources(self):
-        volumes = [r['volume_name'] for r in self.get_vol_stats()]
+        volumes = [r['vol'] for r in self.get_vol_stats()]
         resources = Resource.objects.filter(
             reduce(operator.or_,(Q(name__contains=vol) for vol in volumes))
         )
@@ -507,7 +507,7 @@ class StarFishRedash:
         resource_names = [
             n.split('/')[0] for n in Resource.objects.values_list('name',flat=True)
         ]
-        result = [r for r in result if r['volume_name'] in resource_names]
+        result = [r for r in result if r['vol'] in resource_names]
         return result
 
     def return_query_results(self, query='path_usage_query', volumes=None):
