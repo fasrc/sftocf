@@ -128,6 +128,11 @@ class Command(BaseCommand):
                 status__name__in=['Active', 'Pending Deactivation'],
                 resources__in=sf.get_corresponding_coldfront_resources(),
             )
+            try:
+                vol_paths = zone['vol_paths']
+            except Exception as e:
+                logger.exception('problem identifying vol_paths for %s zone: %s', project.title, e)
+                continue
             zone_paths_not_in_cf = [
                 p['vol_path'] for p in zone['vol_paths']
                 if p['vol_path'].split(':')[0] not in sf_cf_vols
