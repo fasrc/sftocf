@@ -34,7 +34,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         dry_run = options['dry_run'] or DEBUG
         if dry_run:
-            print('DRY RUN')
+            logger.info('DRY RUN')
 
         report = {
             'dry_run': dry_run,
@@ -67,7 +67,7 @@ class Command(BaseCommand):
 
         for dept in zoned_departments:
             if not dept.code:
-                print('no code for department', dept.name)
+                logger.info('no code for department %s', dept.name)
                 continue
             if dept not in departments_with_zones:
                 if not dry_run:
@@ -75,23 +75,20 @@ class Command(BaseCommand):
                         zone = sf.zone_from_department(dept)
                     except HTTPError as e:
                         if e.response.status_code == 409:
-                            logger.warning('zone for %s already exists; breaking', dept.code)
-                            continue
-                        if e.response.status_code == 402:
-                            logger.error('zone quota reached; can no longer add any zones.')
-                            continue
-                        err = f'unclear error prevented creation of zone for department {dept.code}. error: {e.response}'
+                            err = f'zone for {dept.code} already exists; breaking'
+                        elif e.response.status_code == 402:
+                            err = 'zone quota reached; can no longer add any zones.'
+                        else:
+                            err = f'unclear error prevented creation of zone for department {dept.code}. error: {e.response}'
                         logger.error(err)
-                        print(err)
                         continue
                     except ValueError as e:
                         err = f"error encountered. If no groups returned, LDAP group doesn't exist: {e}, {dept.code}"
                         logger.error(err)
-                        print(err)
                         continue
                 report['created_zones'].append(f"{dept.code}_Lab")
             else:
-                print(f"department {dept.code} already has a zone")
+                logger.info("updating zone for department %s", dept.code)
                 # ensure the zone has all the paths and managing groups
                 zone_name = f"{dept.code}_Labs"
                 paths = [
@@ -185,21 +182,18 @@ class Command(BaseCommand):
                     report['created_zones'].append(project.title)
                 except HTTPError as e:
                     if e.response.status_code == 409:
-                        logger.warning('zone for %s already exists; adding zoneid to Project and breaking', project.title)
+                        err = f'zone for {project.title} already exists; adding zoneid to Project'
                         zone = sf.get_zone_by_name(project.title)
                         report['added_zone_ids'].append([project.title, zone['id']])
                     elif e.response.status_code == 402:
-                        logger.error('zone quota reached; can no longer add any zones.')
-                        continue
+                        err = 'zone quota reached; can no longer add any zones.'
                     else:
                         err = f'unclear error prevented creation of zone for project {project.title}. error: {e.response}'
-                        logger.error(err)
-                        print(err)
-                        continue
+                    logger.error(err)
+                    continue
                 except ValueError as e:
                     err = f"error encountered. If no groups returned, LDAP group doesn't exist: {e}, {project.title}"
                     logger.error(err)
-                    print(err)
                     continue
                 project.projectattribute_set.get_or_create(
                     proj_attr_type=starfish_zone_attr_type,
@@ -215,7 +209,7 @@ class Command(BaseCommand):
             title__in=[p.title for p in projects_with_allocations]
         )
         for project in potential_delete_zone_attr_projs:
-            print(project, project.pk)
+            logger.info(project, project.pk)
             zone = sf.get_zones(project.sf_zone)
             zone_paths_not_in_cf = [
                 p['vol_path'] for p in zone['vol_paths']
@@ -229,7 +223,6 @@ class Command(BaseCommand):
                     except ValueError as e:
                         err = f"error encountered when deleting zone {zone['name']}: {e}"
                         logger.error(err)
-                        print(err)
                         continue
                     # delete projectattribute
                     project.projectattribute_set.get(
@@ -237,5 +230,4 @@ class Command(BaseCommand):
                     ).delete()
                 report['deleted_zones'].append(zone['name'])
                 continue
-        print(report)
         logger.warning(report)
