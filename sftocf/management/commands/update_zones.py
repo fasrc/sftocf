@@ -141,7 +141,7 @@ class Command(BaseCommand):
                 if a.path == '':
                     missing_paths = True
                     report['allocations_missing_paths'].append(a.pk)
-                    logger.error('Allocation %s (%s) is missing a path; cannot update zone until this is fixed',
+                    logger.error('Allocation %s (%s) has no path; cannot update zone until this is fixed',
                         a.pk, a)
             if missing_paths:
                 continue
@@ -156,51 +156,56 @@ class Command(BaseCommand):
                     'new_paths': paths,
                 })
 
-            # has the project AD group in “managing_groups”
+            # ensure project AD group in “managing_groups”
             update_groups = zone['members']['groups']
             zone_group_names = [g['groupname'] for g in update_groups]
             if project.title not in zone_group_names:
                 update = True
                 update_groups.append({'groupname': project.title})
+            if update:
+                if not dry_run:
+                    try:
+                        sf.update_zone(zone['name'], paths=paths, managing_groups=update_groups)
+                    except Exception as e:
+                        logger.error("error encountered when updating zone %s: %s", zone['name'], e)
+                        continue
                 report['updated_zone_groups'].append({
                     'zone': zone['name'],
                     'old_groups': zone_group_names,
                     'new_groups': zone_group_names + [project.title],
                 })
-            else:
-                update_groups = ()
-            if update and not dry_run:
-                sf.update_zone(zone['name'], paths=paths, managing_groups=update_groups)
         # if project lacks "Starfish Zone" attribute, create or update the zone and save zone id to ProjectAttribute "Starfish Zone"
         projects_without_zones = projects_with_allocations.exclude(
             projectattribute__proj_attr_type=starfish_zone_attr_type,
         )
-        for project in projects_without_zones:
-            if not dry_run:
+        if dry_run:
+            report['created_zones'] = [project.title for project in projects_without_zones]
+        else:
+            for project in projects_without_zones:
+                zone = None
+                err = None
                 try:
                     zone = sf.zone_from_project(project)
                     report['created_zones'].append(project.title)
                 except HTTPError as e:
                     if e.response.status_code == 409:
-                        err = f'zone for {project.title} already exists; adding zoneid to Project'
                         zone = sf.get_zone_by_name(project.title)
-                        report['added_zone_ids'].append([project.title, zone['id']])
+                        err = f'zone for {project.title} already exists; added zoneid {zone["id"]} to Project'
                     elif e.response.status_code == 402:
                         err = 'zone quota reached; can no longer add any zones.'
                     else:
                         err = f'unclear error prevented creation of zone for project {project.title}. error: {e.response}'
-                    logger.error(err)
-                    continue
                 except ValueError as e:
                     err = f"error encountered. If no groups returned, LDAP group doesn't exist: {e}, {project.title}"
+                if zone:
+                    project.projectattribute_set.get_or_create(
+                        proj_attr_type=starfish_zone_attr_type,
+                        value=zone['id'],
+                    )
+                    report['added_zone_ids'].append([project.title, zone['id']])
+                if err:
                     logger.error(err)
-                    continue
-                project.projectattribute_set.get_or_create(
-                    proj_attr_type=starfish_zone_attr_type,
-                    value=zone['id'],
-                )
-            else:
-                report['created_zones'].append(project.title)
+
 
         # check whether to delete zones of projects with no active SF storage allocations
         potential_delete_zone_attr_projs = Project.objects.filter(
@@ -215,13 +220,19 @@ class Command(BaseCommand):
                 p['vol_path'] for p in zone['vol_paths']
                 if p['vol_path'].split(':')[0] not in sf_cf_vols
             ]
-            # delete any zones that have no paths
-            if not zone_paths_not_in_cf:
-                if not dry_run:
+            if dry_run:
+                report['deleted_zones'].append(zone['name'])
+            else:
+                # delete any zones that have no paths
+                if not zone_paths_not_in_cf:
+                    err = None
                     try:
                         sf.delete_zone(zone['id'])
                     except ValueError as e:
                         err = f"error encountered when deleting zone {zone['name']}: {e}"
+                    except Exception as e:
+                        err = f"unclear error encountered when deleting zone {zone['name']}: {e}"
+                    if err:
                         logger.error(err)
                         continue
                     # delete projectattribute
@@ -229,5 +240,4 @@ class Command(BaseCommand):
                         proj_attr_type=starfish_zone_attr_type,
                     ).delete()
                 report['deleted_zones'].append(zone['name'])
-                continue
         logger.warning(report)
