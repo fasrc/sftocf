@@ -15,6 +15,7 @@ from requests.exceptions import HTTPError
 
 from django.core.management.base import BaseCommand
 
+from coldfront.config.base import DEBUG
 from coldfront.core.project.models import Project, ProjectAttributeType
 from coldfront.core.department.models import Department
 from sftocf.utils import StarFishServer
@@ -31,7 +32,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        dry_run = options['dry_run']
+        dry_run = options['dry_run'] or DEBUG
         if dry_run:
             print('DRY RUN')
 
