@@ -1087,7 +1087,7 @@ def update_allocation(sender, **kwargs):
     )
     if not allocation_data:
         logger.warning(
-            f'No matching allocation found for the given data: %s %s", allocation.project.title, volume_name
+            f"No matching allocation found for the given data: %s %s", allocation.project.title, volume_name
         )
         return
 
