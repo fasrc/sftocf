@@ -1072,7 +1072,7 @@ class RESTDataPipeline(UsageDataPipelineBase):
 def update_allocation(sender, **kwargs):
     '''update the allocation data when the allocation is activated.'''
     logger.debug('allocation_activate signal received')
-    allocation = Allocation.objects.get(pk=kwargs['allocation_pk'])
+    allocation = kwargs['allocation_obj']
     volume_name = allocation.resources.first().name.split('/')[0]
     server = StarFishServer()
     if volume_name not in server.volumes:
@@ -1086,9 +1086,10 @@ def update_allocation(sender, **kwargs):
         allocation.project.title, volume_name, allocation.path
     )
     if not allocation_data:
-        raise ValueError(
-            f'No matching allocation found for the given data: {allocation.project.title}, {volume_name}.'
+        logger.warning(
+            f'No matching allocation found for the given data: %s %s", allocation.project.title, volume_name
         )
+        return
 
     subdir_type = AllocationAttributeType.objects.get(name='Subdirectory')
     allocation.allocationattribute_set.get_or_create(
