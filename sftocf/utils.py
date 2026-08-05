@@ -40,7 +40,7 @@ DATAPATH = import_from_settings('SFTOCF_DATAPATH', _DEFAULT_DATAPATH)
 SFURL = import_from_settings('SFURL', 'starfish')
 PENDING_ACTIVE_ALLOCATION_STATUSES = import_from_settings(
     'PENDING_ACTIVE_ALLOCATION_STATUSES', ['Active', 'New', 'In Progress', 'On Hold'])
-STORAGE_RESOURCES = Resource.objects.filter(resource_type__name='Storage', is_active=True)
+STORAGE_RESOURCES = Resource.objects.filter(resource_type__name='Storage', is_available=True)
 
 logger = logging.getLogger(__name__)
 
