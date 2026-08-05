@@ -96,9 +96,9 @@ def zone_report():
     }
     report['projects_with_allocations_no_zones'] = projs_no_zones
     report['zones_with_no_projects'] = zones_no_projs
-    no_group_zones = [z['name'] for z in zones if not z['managing_groups']]
+    no_group_zones = [z['name'] for z in zones if not z.get('managing_groups')]
     report['zones_with_no_groups'] = no_group_zones
-    user_zones = [z for z in zones if z['managers']]
+    user_zones = [z for z in zones if z.get('managers')]
     report['zones_with_users'] = [
         f"{z['name']}: {z['managers']}" for z in user_zones
     ]
