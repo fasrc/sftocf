@@ -152,11 +152,6 @@ class Command(BaseCommand):
             paths = [f'{get_resource_starfish_name(a.resources.first())}:{a.path}' for a in storage_allocations] + zone_paths_not_in_cf
             if not set(paths) == set([p['vol_path'] for p in zone['vol_paths']]):
                 update = True
-                report['updated_zone_paths'].append({
-                    'zone': zone['name'],
-                    'old_paths': zone['vol_paths'],
-                    'new_paths': paths,
-                })
 
             # ensure project AD group in “managing_groups”
             update_groups = zone['members']['groups']
@@ -168,14 +163,27 @@ class Command(BaseCommand):
                 if not dry_run:
                     try:
                         sf.update_zone(zone['name'], paths=paths, managing_groups=update_groups)
+                        report['updated_zone_paths'].append({
+                            'zone': zone['name'],
+                            'old_paths': zone['vol_paths'],
+                            'new_paths': paths,
+                        })
+                        report['updated_zone_groups'].append({
+                            'zone': zone['name'],
+                            'old_groups': zone_group_names,
+                            'new_groups': zone_group_names + [project.title],
+                        })
                     except Exception as e:
                         logger.error("error encountered when updating zone %s: %s", zone['name'], e)
+                        report['zone_creation_errors'].append({
+                            'zone': zone['name'],
+                            'error': str(e),
+                            'old_paths': zone['vol_paths'],
+                            'new_paths': paths,
+                            'old_groups': zone_group_names,
+                            'new_groups': zone_group_names + [project.title],
+                        })
                         continue
-                report['updated_zone_groups'].append({
-                    'zone': zone['name'],
-                    'old_groups': zone_group_names,
-                    'new_groups': zone_group_names + [project.title],
-                })
         # if project lacks "Starfish Zone" attribute, create or update the zone and save zone id to ProjectAttribute "Starfish Zone"
         projects_without_zone_attr = projects_with_allocations.exclude(
             projectattribute__proj_attr_type=starfish_zone_attr_type,
