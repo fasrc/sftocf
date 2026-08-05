@@ -363,7 +363,10 @@ class StarFishServer:
         return resources
 
     def get_volumes_in_coldfront(self):
-        resource_volume_list = [r.name.split('/')[0] for r in Resource.objects.all()]
+        storage_resources = Resource.objects.filter(resource_type__name='Storage', is_active=True)
+        resource_volume_list = [
+            r.name.split('/')[0] for r in storage_resources
+        ]
         return [v for v in self.volumes if v in resource_volume_list]
 
     def get_volume_attributes(self):
