@@ -2,9 +2,7 @@ import os
 import json
 import time
 import logging
-import operator
 import requests
-from functools import reduce
 from itertools import groupby
 from operator import itemgetter
 from pathlib import Path
@@ -12,7 +10,6 @@ from pathlib import Path
 from datetime import datetime, timedelta
 
 from django.contrib.auth import get_user_model
-from django.db.models import Q
 from django.dispatch import receiver
 from django.utils import timezone
 
@@ -43,6 +40,7 @@ DATAPATH = import_from_settings('SFTOCF_DATAPATH', _DEFAULT_DATAPATH)
 SFURL = import_from_settings('SFURL', 'starfish')
 PENDING_ACTIVE_ALLOCATION_STATUSES = import_from_settings(
     'PENDING_ACTIVE_ALLOCATION_STATUSES', ['Active', 'New', 'In Progress', 'On Hold'])
+STORAGE_RESOURCES = Resource.objects.filter(resource_type__name='Storage', is_available=True)
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +107,17 @@ def zone_report():
         print(r)
         logger.warning(r)
 
+def get_resource_starfish_name(resource):
+    """Return the Starfish volume name associated with a Resource.
+
+    Uses the resource's starfish_name ResourceAttribute if one is set,
+    otherwise falls back to the resource's name.
+    """
+    starfish_name = resource.get_attribute('starfish_name', expand=False, typed=False)
+    if starfish_name:
+        return starfish_name
+    return resource.name
+
 def allocation_to_zone(allocation):
     """
     1. Check whether the allocation is in Starfish
@@ -118,13 +127,14 @@ def allocation_to_zone(allocation):
     """
     server = StarFishServer()
     resource = allocation.resources.first()
-    if not any(sf_res in resource.title for sf_res in server.volumes):
+    resource_name = get_resource_starfish_name(resource)
+    if not any(sf_res == resource_name for sf_res in server.volumes):
         return None
     project = allocation.project
     zone = server.get_zone_by_name(project.title)
     if zone:
         zone_paths = zone['paths']
-        new_path = f"{allocation.resources.first().name.split('/')[0]}:{allocation.path}"
+        new_path = f"{resource_name}:{allocation.path}"
         zone_paths.append(new_path)
         zone.update_zone(paths=zone_paths)
     else:
@@ -323,7 +333,7 @@ class StarFishServer:
         """Create a zone from a department object"""
         zone_name = f"{department_obj.code}_Labs"
         paths = [
-            f"{a.resources.first().name.split('/')[0]}:{a.path}"
+            f"{get_resource_starfish_name(a.resources.first())}:{a.path}"
             for p in department_obj.get_projects().filter(
                 status__name__in=['Active', 'New'],
                 )
@@ -345,7 +355,7 @@ class StarFishServer:
         """Create a zone from a project object"""
         zone_name = project_obj.title
         paths = [
-            f"{a.resources.first().name.split('/')[0]}:{a.path}"
+            f"{get_resource_starfish_name(a.resources.first())}:{a.path}"
             for a in project_obj.allocation_set.filter(
                 status__name__in=['Active', 'Pending Deactivation', 'Updated', 'Ready for Review'],
                 resources__in=self.get_corresponding_coldfront_resources()
@@ -357,13 +367,16 @@ class StarFishServer:
         return self.create_zone(zone_name, paths, [], managing_groups)
 
     def get_corresponding_coldfront_resources(self):
-        resources = Resource.objects.filter(
-            reduce(operator.or_,(Q(name__contains=x) for x in self.volumes))
-        )
-        return resources
+        matching_pks = [
+            r.pk for r in STORAGE_RESOURCES
+            if any(volume == get_resource_starfish_name(r) for volume in self.volumes)
+        ]
+        return Resource.objects.filter(pk__in=matching_pks)
 
     def get_volumes_in_coldfront(self):
-        resource_volume_list = [r.name.split('/')[0] for r in Resource.objects.all()]
+        resource_volume_list = [
+            get_resource_starfish_name(r) for r in STORAGE_RESOURCES
+        ]
         return [v for v in self.volumes if v in resource_volume_list]
 
     def get_volume_attributes(self):
@@ -486,10 +499,11 @@ class StarFishRedash:
 
     def get_corresponding_coldfront_resources(self):
         volumes = [r['vol'] for r in self.get_vol_stats()]
-        resources = Resource.objects.filter(
-            reduce(operator.or_,(Q(name__contains=vol) for vol in volumes))
-        )
-        return resources
+        matching_pks = [
+            r.pk for r in STORAGE_RESOURCES
+            if any(volume in get_resource_starfish_name(r) for volume in volumes)
+        ]
+        return Resource.objects.filter(pk__in=matching_pks)
 
     def submit_query(self, queryname):
         """submit a query and return a json of the results."""
@@ -504,9 +518,7 @@ class StarFishRedash:
         result = [{
             k.replace(' ', '_').replace('(','').replace(')','') : v for k, v in d.items()
         } for d in result]
-        resource_names = [
-            n.split('/')[0] for n in Resource.objects.values_list('name',flat=True)
-        ]
+        resource_names = [get_resource_starfish_name(r) for r in STORAGE_RESOURCES]
         result = [r for r in result if r['vol'] in resource_names]
         return result
 
@@ -622,7 +634,7 @@ class AllocationQueryMatch:
 
     def __init__(self, allocation, total_usage_entries, user_usage_entries):
         self.allocation = allocation
-        self.volume = allocation.get_parent_resource.name.split('/')[0]
+        self.volume = get_resource_starfish_name(allocation.get_parent_resource)
         self.path = allocation.path
         self.total_usage_entry = total_usage_entries[0]
         self.user_usage_entries = user_usage_entries
@@ -690,7 +702,7 @@ class UsageDataPipelineBase:
             self.volumes = [volume]
         else:
             resources = self.connection_obj.get_corresponding_coldfront_resources()
-            self.volumes = [r.name.split('/')[0] for r in resources]
+            self.volumes = [get_resource_starfish_name(r) for r in resources]
 
         self._allocations = None
         # self.collection_filter = self.set_collection_parameters()
@@ -726,7 +738,7 @@ class UsageDataPipelineBase:
         allocations = self.allocations.prefetch_related(
             'project','allocationattribute_set', 'allocationuser_set')
         allocation_list = [
-            (a.get_parent_resource.name.split('/')[0], a.path) for a in allocations
+            (get_resource_starfish_name(a.get_parent_resource), a.path) for a in allocations
         ]
         total_sort_key = itemgetter('path','volume')
         allocation_usage_grouped = return_dict_of_groupings(self.sf_usage_data, total_sort_key)
@@ -744,7 +756,7 @@ class UsageDataPipelineBase:
 
         allocationquerymatch_objs = []
         for allocation in allocations:
-            a = (str(allocation.path), str(allocation.get_parent_resource.name.split('/')[0]))
+            a = (str(allocation.path), str(get_resource_starfish_name(allocation.get_parent_resource)))
             total_usage_entries = allocation_usage_grouped.get(a, None)
             user_usage_entries = user_usage_grouped.get(a, [])
             allocationquerymatch_objs.append(
@@ -900,7 +912,7 @@ class RESTDataPipeline(UsageDataPipelineBase):
             proj_name = allocation.project.title
             resource = allocation.get_parent_resource
             if resource:
-                vol_name = resource.name.split('/')[0]
+                vol_name = get_resource_starfish_name(resource)
             else:
                 message = f'no resource for allocation owned by {proj_name}'
                 print(message)
@@ -1073,7 +1085,7 @@ def update_allocation(sender, **kwargs):
     '''update the allocation data when the allocation is activated.'''
     logger.debug('allocation_activate signal received')
     allocation = kwargs['allocation_obj']
-    volume_name = allocation.resources.first().name.split('/')[0]
+    volume_name = get_resource_starfish_name(allocation.resources.first())
     server = StarFishServer()
     if volume_name not in server.volumes:
         logger.warning(

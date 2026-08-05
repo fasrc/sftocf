@@ -18,7 +18,7 @@ from django.core.management.base import BaseCommand
 from coldfront.config.base import DEBUG
 from coldfront.core.project.models import Project, ProjectAttributeType
 from coldfront.core.department.models import Department
-from sftocf.utils import StarFishServer
+from sftocf.utils import StarFishServer, get_resource_starfish_name
 
 logger = logging.getLogger(__name__)
 class Command(BaseCommand):
@@ -40,6 +40,7 @@ class Command(BaseCommand):
             'dry_run': dry_run,
             'deleted_zones': [],
             'created_zones': [],
+            'zone_creation_errors': [],
             'allocations_missing_paths': [],
             'added_zone_ids': [],
             'updated_zone_paths': [],
@@ -48,6 +49,7 @@ class Command(BaseCommand):
 
         sf = StarFishServer()
         starfish_zone_attr_type = ProjectAttributeType.objects.get(name='Starfish Zone')
+        resources = sf.get_corresponding_coldfront_resources()
         # collect all projects that have active allocations on Starfish
 
         # have zones for departments with more than 10 active projects
@@ -92,13 +94,13 @@ class Command(BaseCommand):
                 # ensure the zone has all the paths and managing groups
                 zone_name = f"{dept.code}_Labs"
                 paths = [
-                    f"{a.resources.first().name.split('/')[0]}:{a.path}"
+                    f"{get_resource_starfish_name(a.resources.first())}:{a.path}"
                     for p in dept.get_projects().filter(
                         status__name__in=['Active', 'New'],
                         )
                     for a in p.allocation_set.filter(
                         status__name__in=['Active', 'Pending Deactivation'],
-                        resources__in=sf.get_corresponding_coldfront_resources()
+                        resources__in=resources
                     )
                     if a.path
                 ]
@@ -108,7 +110,7 @@ class Command(BaseCommand):
         projects_with_allocations = Project.objects.filter(
             status__name='Active',
             allocation__status__name__in=['Active', 'Pending Deactivation'],
-            allocation__resources__in=sf.get_corresponding_coldfront_resources(),
+            allocation__resources__in=resources,
             title__in=sf.get_groups() # confirm the projects have groups in Starfish
         ).distinct()
 
@@ -124,7 +126,7 @@ class Command(BaseCommand):
             # has all the allocation paths associated with the project
             storage_allocations = project.allocation_set.filter(
                 status__name__in=['Active', 'Pending Deactivation'],
-                resources__in=sf.get_corresponding_coldfront_resources(),
+                resources__in=resources,
             )
             try:
                 vol_paths = zone['vol_paths']
@@ -147,7 +149,7 @@ class Command(BaseCommand):
                 continue
 
             update = False
-            paths = [f'{a.resources.first().name.split("/")[0]}:{a.path}' for a in storage_allocations] + zone_paths_not_in_cf
+            paths = [f'{get_resource_starfish_name(a.resources.first())}:{a.path}' for a in storage_allocations] + zone_paths_not_in_cf
             if not set(paths) == set([p['vol_path'] for p in zone['vol_paths']]):
                 update = True
                 report['updated_zone_paths'].append({
@@ -175,13 +177,13 @@ class Command(BaseCommand):
                     'new_groups': zone_group_names + [project.title],
                 })
         # if project lacks "Starfish Zone" attribute, create or update the zone and save zone id to ProjectAttribute "Starfish Zone"
-        projects_without_zones = projects_with_allocations.exclude(
+        projects_without_zone_attr = projects_with_allocations.exclude(
             projectattribute__proj_attr_type=starfish_zone_attr_type,
         )
         if dry_run:
-            report['created_zones'] = [project.title for project in projects_without_zones]
+            report['created_zones'] = [project.title for project in projects_without_zone_attr]
         else:
-            for project in projects_without_zones:
+            for project in projects_without_zone_attr:
                 zone = None
                 err = None
                 try:
