@@ -156,13 +156,14 @@ class Command(BaseCommand):
             # ensure project AD group in “managing_groups”
             update_groups = zone['members']['groups']
             zone_group_names = [g['groupname'] for g in update_groups]
+            managing_groups = ()
             if project.title not in zone_group_names:
                 update = True
-                update_groups.append({'groupname': project.title})
+                managing_groups = ({'groupname': project.title},)
             if update:
                 if not dry_run:
                     try:
-                        sf.update_zone(zone['name'], paths=paths, managing_groups=update_groups)
+                        sf.update_zone(zone['name'], paths=paths, managing_groups=managing_groups)
                         report['updated_zone_paths'].append({
                             'zone': zone['name'],
                             'old_paths': zone['vol_paths'],
@@ -171,7 +172,7 @@ class Command(BaseCommand):
                         report['updated_zone_groups'].append({
                             'zone': zone['name'],
                             'old_groups': zone_group_names,
-                            'new_groups': zone_group_names + [project.title],
+                            'new_groups': update_groups,
                         })
                     except Exception as e:
                         logger.error("error encountered when updating zone %s: %s", zone['name'], e)
@@ -181,7 +182,7 @@ class Command(BaseCommand):
                             'old_paths': zone['vol_paths'],
                             'new_paths': paths,
                             'old_groups': zone_group_names,
-                            'new_groups': zone_group_names + [project.title],
+                            'new_groups': update_groups,
                         })
                         continue
         # if project lacks "Starfish Zone" attribute, create or update the zone and save zone id to ProjectAttribute "Starfish Zone"
