@@ -109,7 +109,7 @@ class Command(BaseCommand):
 
         projects_with_allocations = Project.objects.filter(
             status__name='Active',
-            allocation__status__name__in=['Active', 'Pending Deactivation'],
+            allocation__status__name='Active',
             allocation__resources__in=resources,
             title__in=sf.get_groups() # confirm the projects have groups in Starfish
         ).distinct()
@@ -125,7 +125,7 @@ class Command(BaseCommand):
 
             # has all the allocation paths associated with the project
             storage_allocations = project.allocation_set.filter(
-                status__name__in=['Active', 'Pending Deactivation'],
+                status__name='Active',
                 resources__in=resources,
             )
             try:
