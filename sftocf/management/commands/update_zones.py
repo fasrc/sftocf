@@ -152,6 +152,8 @@ class Command(BaseCommand):
             paths = [f'{get_resource_starfish_name(a.resources.first())}:{a.path}' for a in storage_allocations] + zone_paths_not_in_cf
             if not set(paths) == set([p['vol_path'] for p in zone['vol_paths']]):
                 update = True
+            else:
+                paths = ()
 
             # ensure project AD group in “managing_groups”
             update_groups = zone['members']['groups']
@@ -164,16 +166,6 @@ class Command(BaseCommand):
                 if not dry_run:
                     try:
                         sf.update_zone(zone['name'], paths=paths, managing_groups=managing_groups)
-                        report['updated_zone_paths'].append({
-                            'zone': zone['name'],
-                            'old_paths': zone['vol_paths'],
-                            'new_paths': paths,
-                        })
-                        report['updated_zone_groups'].append({
-                            'zone': zone['name'],
-                            'old_groups': zone_group_names,
-                            'new_groups': update_groups,
-                        })
                     except Exception as e:
                         logger.error("error encountered when updating zone %s: %s", zone['name'], e)
                         report['zone_creation_errors'].append({
@@ -185,6 +177,18 @@ class Command(BaseCommand):
                             'new_groups': update_groups,
                         })
                         continue
+                if paths:
+                    report['updated_zone_paths'].append({
+                        'zone': zone['name'],
+                        'old_paths': zone['vol_paths'],
+                        'new_paths': paths,
+                    })
+                if managing_groups:
+                    report['updated_zone_groups'].append({
+                        'zone': zone['name'],
+                        'old_groups': zone_group_names,
+                        'new_groups': update_groups,
+                    })
         # if project lacks "Starfish Zone" attribute, create or update the zone and save zone id to ProjectAttribute "Starfish Zone"
         projects_without_zone_attr = projects_with_allocations.exclude(
             projectattribute__proj_attr_type=starfish_zone_attr_type,
@@ -195,25 +199,27 @@ class Command(BaseCommand):
             for project in projects_without_zone_attr:
                 zone = None
                 err = None
+                proj_title = project.title
                 try:
                     zone = sf.zone_from_project(project)
-                    report['created_zones'].append(project.title)
+                    report['created_zones'].append(proj_title)
                 except HTTPError as e:
                     if e.response.status_code == 409:
-                        zone = sf.get_zone_by_name(project.title)
-                        err = f'zone for {project.title} already exists; added zoneid {zone["id"]} to Project'
+                        zone = sf.get_zone_by_name(proj_title)
+                        zoneid = zone['id'] if zone else None
+                        err = f'zone already exists; added zoneid. zoneid={zoneid},project={proj_title}'
                     elif e.response.status_code == 402:
                         err = 'zone quota reached; can no longer add any zones.'
                     else:
-                        err = f'unclear error prevented creation of zone for project {project.title}. error: {e.response}'
+                        err = f'unclear error prevented creation of zone for project {proj_title}. error: {e.response}'
                 except ValueError as e:
-                    err = f"error encountered. If no groups returned, LDAP group doesn't exist: {e}, {project.title}"
+                    err = f"error encountered. If no groups returned, LDAP group doesn't exist: {e}, {proj_title}"
                 if zone:
                     project.projectattribute_set.get_or_create(
                         proj_attr_type=starfish_zone_attr_type,
                         value=zone['id'],
                     )
-                    report['added_zone_ids'].append([project.title, zone['id']])
+                    report['added_zone_ids'].append([proj_title, zone['id']])
                 if err:
                     logger.error(err)
 

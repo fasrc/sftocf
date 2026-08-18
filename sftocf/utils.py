@@ -292,7 +292,7 @@ class StarFishServer:
             self.update_zone_members(
                 zone_id, member_users=managers, member_groups=managing_groups
             )
-        if paths and paths != [p['vol_path'] for p in zone_data['vol_paths']]:
+        if paths != ():
             self.update_zone_paths(zone_id, paths)
 
     def get_zone_paths(self, zone_id):
