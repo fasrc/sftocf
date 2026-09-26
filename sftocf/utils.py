@@ -21,7 +21,6 @@ from coldfront.core.utils.fasrc import (
     log_missing,
     determine_size_fmt,
     id_present_missing_users,
-    locate_or_create_dirpath,
 )
 from coldfront.core.resource.models import Resource
 from coldfront.core.project.models import Project
@@ -48,7 +47,7 @@ svp = json.loads(import_from_settings('SF_VOLUME_MAPPING', '{}'))
 
 username_ignore_list = import_from_settings('username_ignore_list', [])
 
-locate_or_create_dirpath(DATAPATH)
+os.makedirs(DATAPATH, exist_ok=True)
 
 def record_process(func):
     """Wrapper function for logging"""
