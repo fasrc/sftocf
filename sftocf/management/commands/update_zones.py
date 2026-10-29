@@ -44,6 +44,7 @@ class Command(BaseCommand):
             'allocations_missing_paths': [],
             'added_zone_ids': [],
             'updated_zone_paths': [],
+            'failed_zone_paths': [],
             'updated_zone_groups': []
         }
 
@@ -104,7 +105,12 @@ class Command(BaseCommand):
                     )
                     if a.path
                 ]
-                sf.update_zone(zone_name, paths=list(paths))
+                failed_paths = sf.update_zone(zone_name, paths=list(paths))
+                if failed_paths:
+                    report['failed_zone_paths'].append({
+                        'zone': zone_name,
+                        'failed_paths': failed_paths,
+                    })
 
 
         projects_with_allocations = Project.objects.filter(
@@ -163,9 +169,11 @@ class Command(BaseCommand):
                 update = True
                 managing_groups = ({'groupname': project.title},)
             if update:
+                failed_paths = []
                 if not dry_run:
                     try:
-                        sf.update_zone(zone['name'], paths=paths, managing_groups=managing_groups)
+                        failed_paths = sf.update_zone(
+                            zone['name'], paths=paths, managing_groups=managing_groups)
                     except Exception as e:
                         logger.error("error encountered when updating zone %s: %s", zone['name'], e)
                         report['zone_creation_errors'].append({
@@ -177,11 +185,16 @@ class Command(BaseCommand):
                             'new_groups': update_groups,
                         })
                         continue
+                if failed_paths:
+                    report['failed_zone_paths'].append({
+                        'zone': zone['name'],
+                        'failed_paths': failed_paths,
+                    })
                 if paths:
                     report['updated_zone_paths'].append({
                         'zone': zone['name'],
                         'old_paths': zone['vol_paths'],
-                        'new_paths': paths,
+                        'new_paths': [p for p in paths if p not in failed_paths],
                     })
                 if managing_groups:
                     report['updated_zone_groups'].append({

@@ -279,7 +279,10 @@ class StarFishServer:
 
 
     def update_zone(self, zone_name, paths=(), managers=(), managing_groups=()):
-        """Update a zone via the API"""
+        """Update a zone via the API
+
+        Returns the list of paths that could not be added to the zone.
+        """
         zone_data = self.get_zone_by_name(zone_name)
         zone_id = zone_data['id']
         for group in managing_groups:
@@ -291,8 +294,10 @@ class StarFishServer:
             self.update_zone_members(
                 zone_id, member_users=managers, member_groups=managing_groups
             )
+        failed_paths = []
         if paths != ():
-            self.update_zone_paths(zone_id, paths)
+            failed_paths = self.update_zone_paths(zone_id, paths)
+        return failed_paths
 
     def get_zone_paths(self, zone_id):
         url = self.api_url + f'v2/zones/{zone_id}/zones_roots/'
@@ -301,15 +306,18 @@ class StarFishServer:
 
 
     def update_zone_paths(self, zone_id, paths):
-        """Update paths in a zone via the API"""
+        """Update paths in a zone via the API
+
+        Returns the list of paths that could not be added to the zone.
+        """
         zone = self.get_zones(zone_id=zone_id)
         url = self.api_url + f'v2/zones/{zone_id}/zones_roots/'
         data = {'set': paths}
+        failed_paths = []
         try:
-            response = return_patch_json(url, data=data, headers=self.headers)
+            return_patch_json(url, data=data, headers=self.headers)
         except Exception as e:
             logger.warning('Error adding paths to zone %s: %s', zone['name'], e)
-            failed_paths = []
             existing_paths = [p['vol_path'] for p in self.get_zone_paths(zone_id)]
             paths_to_remove = [p for p in existing_paths if p not in paths]
             if paths_to_remove:
@@ -327,6 +335,7 @@ class StarFishServer:
                         logger.warning(
                             'Error adding path %s to zone %s: %s', path, zone['name'], e)
                         failed_paths.append(path)
+        return failed_paths
 
     def zone_from_department(self, department_obj):
         """Create a zone from a department object"""
