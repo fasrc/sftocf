@@ -47,6 +47,12 @@ jobs:
 
           COPY --from=ghcr.io/astral-sh/uv:0.9.13 /uv /bin/uv
 
+          # The base image is built with --no-dev, so test-only deps like
+          # factory-boy/faker (needed by coldfront.core.test_helpers.factories)
+          # aren't installed yet.
+          RUN uv sync --locked --dev \
+              --extra ldap --extra freeipa --extra iquota --extra oidc --extra mysql --extra pg
+
           COPY sftocf /opt/sftocf
           RUN uv pip install --python /app/.venv/bin/python /opt/sftocf
 
