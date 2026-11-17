@@ -57,4 +57,4 @@ jobs:
         run: docker build -t coldfront-sftocf:ci -f Dockerfile.sftocf .
 
       - name: Run sftocf test suite
-        run: docker run --rm coldfront-sftocf:ci python manage.py test sftocf -v 2
+        run: docker run --rm -e PLUGIN_IFX=True coldfront-sftocf:ci python manage.py test sftocf -v 2
