@@ -14,14 +14,7 @@ from django.dispatch import receiver
 from django.utils import timezone
 
 from coldfront.core.allocation.signals import allocation_activate
-from coldfront.core.utils.common import import_from_settings, uniques_and_intersection
-from coldfront.core.utils.fasrc import (
-    read_json,
-    save_json,
-    log_missing,
-    determine_size_fmt,
-    id_present_missing_users,
-)
+from coldfront.core.utils.common import import_from_settings
 from coldfront.core.resource.models import Resource
 from coldfront.core.project.models import Project
 from coldfront.core.allocation.models import (
@@ -30,6 +23,7 @@ from coldfront.core.allocation.models import (
     AllocationUserStatusChoice,
 )
 from sftocf.signals import starfish_add_aduser, starfish_remove_aduser, starfish_add_adgroup
+
 
 _PLUGIN_ROOT = Path(__file__).resolve().parent
 
@@ -49,6 +43,59 @@ username_ignore_list = import_from_settings('username_ignore_list', [])
 
 os.makedirs(DATAPATH, exist_ok=True)
 
+
+
+def return_unit_system(system):
+    if system == 'binary':
+        units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB']
+        divisor = 1024.0
+    elif system == 'decimal':
+        units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB']
+        divisor = 1000.0
+    else:
+        raise Exception('invalid system')
+    return units, divisor
+
+def determine_size_fmt(byte_num, system='binary'):
+    """Return the correct human-readable byte measurement.
+    """
+    units, divisor = return_unit_system(system)
+    for u in units:
+        unit = u
+        if abs(byte_num) < divisor:
+            return (round(byte_num, 3), unit)
+        byte_num /= divisor
+    return (round(byte_num, 3), unit)
+
+def id_present_missing_users(username_list):
+    """
+    Collect all User entries with usernames in param username_list; return tuple
+    of all matching User entries and all usernames with no User entries.
+    """
+    present_users = get_user_model().objects.filter(username__in=username_list)
+    present_usernames = list(present_users.values_list('username', flat=True))
+    missing_usernames = [
+        {'username': n} for n in username_list
+        if n not in present_usernames and n not in username_ignore_list
+    ]
+    return (present_users, missing_usernames)
+
+def uniques_and_intersection(list1, list2):
+    """Vendored from coldfront.core.utils.common, which isn't present on
+    every ColdFront fork this plugin targets."""
+    intersection = list(set(list1) & set(list2))
+    list1_unique = list(set(list1) - set(list2))
+    list2_unique = list(set(list2) - set(list1))
+    return (list1_unique, intersection, list2_unique)
+
+def read_json(filepath):
+    with open(filepath, 'r') as json_file:
+        data = json.loads(json_file.read())
+    return data
+
+def save_json(file, contents):
+    with open(file, 'w') as fp:
+        json.dump(contents, fp, sort_keys=True, indent=4)
 def record_process(func):
     """Wrapper function for logging"""
     def call(*args, **kwargs):
@@ -795,7 +842,7 @@ class UsageDataPipelineBase:
                 for d in obj.users_in_list(missing_username_list)
                 if d['username'] not in username_ignore_list
             ]
-            log_missing('user', missing_unames_metadata)
+            logger.warning('missing users detected: %s', missing_unames_metadata)
             for i in obj.users_in_list(missing_username_list):
                 obj.user_usage_entries.remove(i)
         return self.allocationquerymatches, user_models
@@ -1148,4 +1195,4 @@ def update_allocation(sender, **kwargs):
         allocation_query_match.total_usage_tib
     )
     if missing_users:
-        log_missing('user', missing_users)
+        logger.warning('missing users detected: %s', missing_users)
