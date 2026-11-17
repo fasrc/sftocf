@@ -48,7 +48,7 @@ jobs:
           FROM coldfront-base:ci
 
           COPY sftocf /opt/sftocf
-          RUN pip install --no-cache-dir --force-reinstall /opt/sftocf
+          RUN pip install --no-cache-dir --force-reinstall "/opt/sftocf[test]"
 
           COPY local_settings.py /usr/src/app/local_settings.py
           DOCKER
