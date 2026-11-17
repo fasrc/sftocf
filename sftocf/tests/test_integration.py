@@ -4,6 +4,7 @@ from pathlib import Path
 
 from django.test import TestCase, override_settings
 
+from coldfront.core.allocation.models import AllocationAttribute, AllocationAttributeType
 from coldfront.core.test_helpers.factories import setup_models
 from sftocf.utils import AllocationQueryMatch
 
@@ -26,8 +27,11 @@ class AllocationQueryMatchDBTests(TestCase):
 
     def test_storage_allocation_query_match_total_tib(self):
         alloc = self.storage_allocation
-        alloc.path = 'C/LABS/poisson_lab'
-        alloc.save(update_fields=['path'])
+        AllocationAttribute.objects.create(
+            allocation=alloc,
+            allocation_attribute_type=AllocationAttributeType.objects.get(name='Subdirectory'),
+            value='C/LABS/poisson_lab',
+        )
         one_tib = 1099511627776
         totals = [{'total_size': one_tib}]
         users = [{'username': 'sdpoisson', 'size_sum': 100}]
