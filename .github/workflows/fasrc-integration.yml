@@ -27,6 +27,8 @@ jobs:
           repository: fasrc/coldfront
           ref: master
           path: coldfront
+          submodules: recursive
+          token: ${{ secrets.GIT_HTTPS_TOKEN }}
 
       - name: Build base ColdFront image
         working-directory: coldfront
