@@ -1,14 +1,22 @@
 """Unit tests for pure helpers and AllocationQueryMatch (mocked allocations)."""
 
+import tempfile
 from operator import itemgetter
+from pathlib import Path
 from unittest.mock import Mock
 
 from django.test import SimpleTestCase
 
 from sftocf.utils import (
     AllocationQueryMatch,
+    determine_size_fmt,
     generate_headers,
+    get_allocation_path,
+    get_resource_starfish_name,
+    read_json,
     return_dict_of_groupings,
+    save_json,
+    uniques_and_intersection,
 )
 
 
@@ -36,7 +44,7 @@ class AllocationQueryMatchNewTests(SimpleTestCase):
     def _make_allocation_mock(self):
         alloc = Mock()
         alloc.pk = 42
-        alloc.path = '/lab/path'
+        alloc.allocationattribute_set.filter.return_value.first.return_value.value = '/lab/path'
         alloc.project.title = 'test_lab'
         alloc.resources.first.return_value = Mock()
         alloc.resources.first.return_value.name = 'holylfs10/tier1'
@@ -79,4 +87,89 @@ class AllocationQueryMatchNewTests(SimpleTestCase):
         users = [{'username': 'a'}, {'username': 'b'}]
         m = AllocationQueryMatch(alloc, totals, users)
         self.assertEqual(len(m.users_in_list(['a'])), 1)
+
+    def test_users_not_in_list_raises_keyerror(self):
+        """users_not_in_list filters on entry['user_name'], but every
+        user_usage_entries dict elsewhere in this module (and in
+        users_in_list, right above) uses 'username'. With realistic data
+        this raises KeyError instead of filtering anything. Documenting the
+        current behavior here rather than silently relying on it; the fix
+        is presumably s/user_name/username/ in users_not_in_list.
+        """
+        alloc = self._make_allocation_mock()
+        totals = [{'total_size': 100}]
+        users = [{'username': 'a'}, {'username': 'b'}]
+        m = AllocationQueryMatch(alloc, totals, users)
+        with self.assertRaises(KeyError):
+            m.users_not_in_list(['a'])
+
+
+class GetAllocationPathTests(SimpleTestCase):
+    def test_returns_value_when_subdirectory_attribute_present(self):
+        alloc = Mock()
+        alloc.allocationattribute_set.filter.return_value.first.return_value.value = '/lab/path'
+        self.assertEqual(get_allocation_path(alloc), '/lab/path')
+        alloc.allocationattribute_set.filter.assert_called_once_with(
+            allocation_attribute_type__name='Subdirectory'
+        )
+
+    def test_returns_empty_string_when_no_subdirectory_attribute(self):
+        alloc = Mock()
+        alloc.allocationattribute_set.filter.return_value.first.return_value = None
+        self.assertEqual(get_allocation_path(alloc), '')
+
+
+class UniquesAndIntersectionTests(SimpleTestCase):
+    def test_splits_into_three_groups(self):
+        only1, both, only2 = uniques_and_intersection(['a', 'b', 'c'], ['b', 'c', 'd'])
+        self.assertEqual(set(only1), {'a'})
+        self.assertEqual(set(both), {'b', 'c'})
+        self.assertEqual(set(only2), {'d'})
+
+    def test_no_overlap(self):
+        only1, both, only2 = uniques_and_intersection(['a'], ['b'])
+        self.assertEqual(only1, ['a'])
+        self.assertEqual(both, [])
+        self.assertEqual(only2, ['b'])
+
+
+class DetermineSizeFmtTests(SimpleTestCase):
+    def test_binary_bytes_stays_in_bytes(self):
+        self.assertEqual(determine_size_fmt(512), (512, 'B'))
+
+    def test_binary_crosses_into_tib(self):
+        value, unit = determine_size_fmt(1099511627776)  # 1 TiB
+        self.assertEqual(unit, 'TiB')
+        self.assertAlmostEqual(value, 1.0)
+
+    def test_decimal_system_uses_1000_divisor(self):
+        value, unit = determine_size_fmt(1_000_000, system='decimal')
+        self.assertEqual(unit, 'MB')
+        self.assertAlmostEqual(value, 1.0)
+
+    def test_invalid_system_raises(self):
+        with self.assertRaises(Exception):
+            determine_size_fmt(100, system='nonsense')
+
+
+class JsonRoundTripTests(SimpleTestCase):
+    def test_save_then_read_round_trip(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / 'data.json'
+            save_json(str(path), {'a': 1, 'b': [1, 2, 3]})
+            self.assertEqual(read_json(str(path)), {'a': 1, 'b': [1, 2, 3]})
+
+
+class GetResourceStarfishNameTests(SimpleTestCase):
+    def test_uses_starfish_name_attribute_when_set(self):
+        resource = Mock()
+        resource.get_attribute.return_value = 'starfish_vol1'
+        resource.name = 'holylfs10/tier1'
+        self.assertEqual(get_resource_starfish_name(resource), 'starfish_vol1')
+
+    def test_falls_back_to_resource_name_when_unset(self):
+        resource = Mock()
+        resource.get_attribute.return_value = None
+        resource.name = 'holylfs10/tier1'
+        self.assertEqual(get_resource_starfish_name(resource), 'holylfs10/tier1')
 

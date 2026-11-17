@@ -1,0 +1,60 @@
+name: ColdFront 1.1.x integration tests
+
+# Builds a container from coldfront/coldfront's stable/1.1.x branch (the
+# upstream, non-FASRC ColdFront) with this plugin installed into it, then
+# runs the sftocf test suite inside that container.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  integration:
+    name: Build coldfront/coldfront (1.1.x) + sftocf and run plugin tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out sftocf
+        uses: actions/checkout@v4
+        with:
+          path: sftocf
+
+      - name: Check out coldfront/coldfront (stable/1.1.x)
+        uses: actions/checkout@v4
+        with:
+          repository: coldfront/coldfront
+          ref: stable/1.1.x
+          path: coldfront
+
+      - name: Build base ColdFront image
+        working-directory: coldfront
+        run: docker build --target builder -t coldfront-base:ci .
+
+      - name: Write local_settings.py enabling the sftocf app
+        run: |
+          cat > local_settings.py <<'PY'
+          from coldfront.config.base import INSTALLED_APPS
+
+          INSTALLED_APPS += ['sftocf']
+          PY
+
+      - name: Write Dockerfile that installs sftocf into the image
+        run: |
+          cat > Dockerfile.sftocf <<'DOCKER'
+          FROM coldfront-base:ci
+
+          COPY --from=ghcr.io/astral-sh/uv:0.9.13 /uv /bin/uv
+
+          COPY sftocf /opt/sftocf
+          RUN uv pip install --python /app/.venv/bin/python "/opt/sftocf[test]"
+
+          COPY local_settings.py /app/local_settings.py
+          DOCKER
+
+      - name: Build ColdFront image with sftocf installed
+        run: docker build -t coldfront-sftocf:ci -f Dockerfile.sftocf .
+
+      - name: Run sftocf test suite
+        run: docker run --rm coldfront-sftocf:ci /app/.venv/bin/python /app/manage.py test sftocf -v 2

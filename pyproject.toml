@@ -21,6 +21,12 @@ dependencies = [
   "requests>=2.28",
 ]
 
+[project.optional-dependencies]
+test = [
+  "factory-boy>=3.3",
+  "faker>=37",
+]
+
 [project.urls]
 Homepage = "https://github.com/fasrc/sftocf"
 

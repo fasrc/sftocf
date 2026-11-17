@@ -14,14 +14,7 @@ from django.dispatch import receiver
 from django.utils import timezone
 
 from coldfront.core.allocation.signals import allocation_activate
-from coldfront.core.utils.common import import_from_settings, uniques_and_intersection
-from coldfront.core.utils.fasrc import (
-    read_json,
-    save_json,
-    log_missing,
-    determine_size_fmt,
-    id_present_missing_users,
-)
+from coldfront.core.utils.common import import_from_settings
 from coldfront.core.resource.models import Resource
 from coldfront.core.project.models import Project
 from coldfront.core.allocation.models import (
@@ -30,6 +23,7 @@ from coldfront.core.allocation.models import (
     AllocationUserStatusChoice,
 )
 from sftocf.signals import starfish_add_aduser, starfish_remove_aduser, starfish_add_adgroup
+
 
 _PLUGIN_ROOT = Path(__file__).resolve().parent
 
@@ -49,6 +43,72 @@ username_ignore_list = import_from_settings('username_ignore_list', [])
 
 os.makedirs(DATAPATH, exist_ok=True)
 
+
+
+def return_unit_system(system):
+    if system == 'binary':
+        units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB']
+        divisor = 1024.0
+    elif system == 'decimal':
+        units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB']
+        divisor = 1000.0
+    else:
+        raise Exception('invalid system')
+    return units, divisor
+
+def determine_size_fmt(byte_num, system='binary'):
+    """Return the correct human-readable byte measurement.
+    """
+    units, divisor = return_unit_system(system)
+    for u in units:
+        unit = u
+        if abs(byte_num) < divisor:
+            return (round(byte_num, 3), unit)
+        byte_num /= divisor
+    return (round(byte_num, 3), unit)
+
+def id_present_missing_users(username_list):
+    """
+    Collect all User entries with usernames in param username_list; return tuple
+    of all matching User entries and all usernames with no User entries.
+    """
+    present_users = get_user_model().objects.filter(username__in=username_list)
+    present_usernames = list(present_users.values_list('username', flat=True))
+    missing_usernames = [
+        {'username': n} for n in username_list
+        if n not in present_usernames and n not in username_ignore_list
+    ]
+    return (present_users, missing_usernames)
+
+def uniques_and_intersection(list1, list2):
+    """Vendored from coldfront.core.utils.common, which isn't present on
+    every ColdFront fork this plugin targets."""
+    intersection = list(set(list1) & set(list2))
+    list1_unique = list(set(list1) - set(list2))
+    list2_unique = list(set(list2) - set(list1))
+    return (list1_unique, intersection, list2_unique)
+
+def get_allocation_path(allocation):
+    """Return an allocation's filesystem subdirectory.
+
+    Some ColdFront forks (e.g. fasrc/coldfront) expose this as an
+    Allocation.path property; upstream coldfront/coldfront does not, so
+    look up the 'Subdirectory' AllocationAttribute directly instead of
+    relying on that property being present.
+    """
+    attr = allocation.allocationattribute_set.filter(
+        allocation_attribute_type__name='Subdirectory'
+    ).first()
+    return attr.value if attr else ''
+
+def read_json(filepath):
+    with open(filepath, 'r') as json_file:
+        data = json.loads(json_file.read())
+    return data
+
+def save_json(file, contents):
+    with open(file, 'w') as fp:
+        json.dump(contents, fp, sort_keys=True, indent=4)
 def record_process(func):
     """Wrapper function for logging"""
     def call(*args, **kwargs):
@@ -133,7 +193,7 @@ def allocation_to_zone(allocation):
     zone = server.get_zone_by_name(project.title)
     if zone:
         zone_paths = zone['paths']
-        new_path = f"{resource_name}:{allocation.path}"
+        new_path = f"{resource_name}:{get_allocation_path(allocation)}"
         zone_paths.append(new_path)
         zone.update_zone(paths=zone_paths)
     else:
@@ -341,7 +401,7 @@ class StarFishServer:
         """Create a zone from a department object"""
         zone_name = f"{department_obj.code}_Labs"
         paths = [
-            f"{get_resource_starfish_name(a.resources.first())}:{a.path}"
+            f"{get_resource_starfish_name(a.resources.first())}:{get_allocation_path(a)}"
             for p in department_obj.get_projects().filter(
                 status__name__in=['Active', 'New'],
                 )
@@ -349,7 +409,7 @@ class StarFishServer:
                 status__name='Active',
                 resources__in=self.get_corresponding_coldfront_resources()
             )
-            if a.path
+            if get_allocation_path(a)
         ]
         approvers = list(
             department_obj.members.filter(role='Approver').values_list('user__username', flat=True)
@@ -363,12 +423,12 @@ class StarFishServer:
         """Create a zone from a project object"""
         zone_name = project_obj.title
         paths = [
-            f"{get_resource_starfish_name(a.resources.first())}:{a.path}"
+            f"{get_resource_starfish_name(a.resources.first())}:{get_allocation_path(a)}"
             for a in project_obj.allocation_set.filter(
                 status__name__in=['Active', 'Updated', 'Ready for Review'],
                 resources__in=self.get_corresponding_coldfront_resources()
             )
-            if a.path
+            if get_allocation_path(a)
         ]
         managing_groups = [{'groupname': project_obj.title}]
         add_zone_group_to_ad(project_obj.title)
@@ -643,7 +703,7 @@ class AllocationQueryMatch:
     def __init__(self, allocation, total_usage_entries, user_usage_entries):
         self.allocation = allocation
         self.volume = get_resource_starfish_name(allocation.get_parent_resource)
-        self.path = allocation.path
+        self.path = get_allocation_path(allocation)
         self.total_usage_entry = total_usage_entries[0]
         self.user_usage_entries = user_usage_entries
 
@@ -746,7 +806,8 @@ class UsageDataPipelineBase:
         allocations = self.allocations.prefetch_related(
             'project','allocationattribute_set', 'allocationuser_set')
         allocation_list = [
-            (get_resource_starfish_name(a.get_parent_resource), a.path) for a in allocations
+            (get_resource_starfish_name(a.get_parent_resource), get_allocation_path(a))
+            for a in allocations
         ]
         total_sort_key = itemgetter('path','volume')
         allocation_usage_grouped = return_dict_of_groupings(self.sf_usage_data, total_sort_key)
@@ -764,7 +825,7 @@ class UsageDataPipelineBase:
 
         allocationquerymatch_objs = []
         for allocation in allocations:
-            a = (str(allocation.path), str(get_resource_starfish_name(allocation.get_parent_resource)))
+            a = (str(get_allocation_path(allocation)), str(get_resource_starfish_name(allocation.get_parent_resource)))
             total_usage_entries = allocation_usage_grouped.get(a, None)
             user_usage_entries = user_usage_grouped.get(a, [])
             allocationquerymatch_objs.append(
@@ -795,7 +856,7 @@ class UsageDataPipelineBase:
                 for d in obj.users_in_list(missing_username_list)
                 if d['username'] not in username_ignore_list
             ]
-            log_missing('user', missing_unames_metadata)
+            logger.warning('missing users detected: %s', missing_unames_metadata)
             for i in obj.users_in_list(missing_username_list):
                 obj.user_usage_entries.remove(i)
         return self.allocationquerymatches, user_models
@@ -810,7 +871,7 @@ class UsageDataPipelineBase:
         # 3. iterate across allocations
         for obj in self.allocationquerymatches:
             logger.debug('updating allocation %s %s (path %s)',
-                obj.lab, obj.volume, obj.allocation.path
+                obj.lab, obj.volume, obj.path
             )
             if obj.allocation.get_parent_resource.quantity_label == 'TB':
                 quota_size_attrtype = quota_tb_attrtype
@@ -928,8 +989,9 @@ class RESTDataPipeline(UsageDataPipelineBase):
                 continue
             if resource not in self.volumes:
                 continue
-            if allocation.path:
-                labs_resources[proj_name].append((vol_name, allocation.path))
+            allocation_path = get_allocation_path(allocation)
+            if allocation_path:
+                labs_resources[proj_name].append((vol_name, allocation_path))
         return labs_resources
 
     def check_volume_collection(self, lr):
@@ -1103,7 +1165,7 @@ def update_allocation(sender, **kwargs):
         return
     sf_redash_data = RedashDataPipeline(volume=volume_name)
     user_data, allocation_data = sf_redash_data.collect_sf_data_for_lab(
-        allocation.project.title, volume_name, allocation.path
+        allocation.project.title, volume_name, get_allocation_path(allocation)
     )
     if not allocation_data:
         logger.warning(
@@ -1148,4 +1210,4 @@ def update_allocation(sender, **kwargs):
         allocation_query_match.total_usage_tib
     )
     if missing_users:
-        log_missing('user', missing_users)
+        logger.warning('missing users detected: %s', missing_users)

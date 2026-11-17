@@ -4,7 +4,7 @@ import pandas as pd
 from django.core.management.base import BaseCommand
 
 from coldfront.core.allocation.models import Allocation
-from sftocf.utils import StarFishRedash, StarFishServer, get_resource_starfish_name
+from sftocf.utils import StarFishRedash, StarFishServer, get_allocation_path, get_resource_starfish_name
 from coldfront.core.utils.common import import_from_settings
 
 CENTER_BASE_URL = import_from_settings("CENTER_BASE_URL", "")
@@ -39,7 +39,7 @@ class Command(BaseCommand):
             a for a in
             Allocation.objects.filter(
                 resources__resource_type__name='Storage', status__name='Active')
-            if not a.path and any(v in a.resources.first().name for v in searched_resources)
+            if not get_allocation_path(a) and any(v in a.resources.first().name for v in searched_resources)
         ]
         for allocation in allocations:
             lab = allocation.project.title
@@ -61,7 +61,7 @@ class Command(BaseCommand):
                 resources__name__contains=volume,
                 project__title=lab
             ).exclude(pk=allocation.pk)
-            other_allocations_paths = [a.path for a in other_allocations]
+            other_allocations_paths = [get_allocation_path(a) for a in other_allocations]
             matched_paths = [
                 entry for entry in matched_paths if entry['path'] not in other_allocations_paths
             ]

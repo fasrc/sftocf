@@ -1,0 +1,60 @@
+name: ColdFront integration tests
+
+# Builds a container from the master branch of fasrc/coldfront with this
+# plugin installed into it, then runs the sftocf test suite inside that
+# container.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  integration:
+    name: Build fasrc/coldfront + sftocf and run plugin tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out sftocf
+        uses: actions/checkout@v4
+        with:
+          path: sftocf
+
+      - name: Check out fasrc/coldfront (master)
+        uses: actions/checkout@v4
+        with:
+          repository: fasrc/coldfront
+          ref: master
+          path: coldfront
+          submodules: recursive
+          token: ${{ secrets.GIT_HTTPS_TOKEN }}
+
+      - name: Build base ColdFront image
+        working-directory: coldfront
+        run: docker build -t coldfront-base:ci .
+
+      - name: Write local_settings.py enabling the sftocf app
+        run: |
+          cat > local_settings.py <<'PY'
+          from coldfront.config.base import INSTALLED_APPS
+
+          INSTALLED_APPS += ['sftocf']
+          PY
+
+      - name: Write Dockerfile that installs sftocf into the image
+        run: |
+          cat > Dockerfile.sftocf <<'DOCKER'
+          FROM coldfront-base:ci
+
+          COPY sftocf /opt/sftocf
+          RUN pip install --no-cache-dir --force-reinstall "/opt/sftocf[test]"
+
+          COPY local_settings.py /usr/src/app/local_settings.py
+          DOCKER
+
+      - name: Build ColdFront image with sftocf installed
+        run: docker build -t coldfront-sftocf:ci -f Dockerfile.sftocf .
+
+      - name: Run sftocf test suite
+        run: docker run --rm -e PLUGIN_IFX=True coldfront-sftocf:ci python manage.py test sftocf -v 2
