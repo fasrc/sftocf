@@ -36,7 +36,7 @@ class AllocationQueryMatchNewTests(SimpleTestCase):
     def _make_allocation_mock(self):
         alloc = Mock()
         alloc.pk = 42
-        alloc.path = '/lab/path'
+        alloc.allocationattribute_set.filter.return_value.first.return_value.value = '/lab/path'
         alloc.project.title = 'test_lab'
         alloc.resources.first.return_value = Mock()
         alloc.resources.first.return_value.name = 'holylfs10/tier1'

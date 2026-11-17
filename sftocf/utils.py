@@ -88,6 +88,19 @@ def uniques_and_intersection(list1, list2):
     list2_unique = list(set(list2) - set(list1))
     return (list1_unique, intersection, list2_unique)
 
+def get_allocation_path(allocation):
+    """Return an allocation's filesystem subdirectory.
+
+    Some ColdFront forks (e.g. fasrc/coldfront) expose this as an
+    Allocation.path property; upstream coldfront/coldfront does not, so
+    look up the 'Subdirectory' AllocationAttribute directly instead of
+    relying on that property being present.
+    """
+    attr = allocation.allocationattribute_set.filter(
+        allocation_attribute_type__name='Subdirectory'
+    ).first()
+    return attr.value if attr else ''
+
 def read_json(filepath):
     with open(filepath, 'r') as json_file:
         data = json.loads(json_file.read())
@@ -180,7 +193,7 @@ def allocation_to_zone(allocation):
     zone = server.get_zone_by_name(project.title)
     if zone:
         zone_paths = zone['paths']
-        new_path = f"{resource_name}:{allocation.path}"
+        new_path = f"{resource_name}:{get_allocation_path(allocation)}"
         zone_paths.append(new_path)
         zone.update_zone(paths=zone_paths)
     else:
@@ -388,7 +401,7 @@ class StarFishServer:
         """Create a zone from a department object"""
         zone_name = f"{department_obj.code}_Labs"
         paths = [
-            f"{get_resource_starfish_name(a.resources.first())}:{a.path}"
+            f"{get_resource_starfish_name(a.resources.first())}:{get_allocation_path(a)}"
             for p in department_obj.get_projects().filter(
                 status__name__in=['Active', 'New'],
                 )
@@ -396,7 +409,7 @@ class StarFishServer:
                 status__name='Active',
                 resources__in=self.get_corresponding_coldfront_resources()
             )
-            if a.path
+            if get_allocation_path(a)
         ]
         approvers = list(
             department_obj.members.filter(role='Approver').values_list('user__username', flat=True)
@@ -410,12 +423,12 @@ class StarFishServer:
         """Create a zone from a project object"""
         zone_name = project_obj.title
         paths = [
-            f"{get_resource_starfish_name(a.resources.first())}:{a.path}"
+            f"{get_resource_starfish_name(a.resources.first())}:{get_allocation_path(a)}"
             for a in project_obj.allocation_set.filter(
                 status__name__in=['Active', 'Updated', 'Ready for Review'],
                 resources__in=self.get_corresponding_coldfront_resources()
             )
-            if a.path
+            if get_allocation_path(a)
         ]
         managing_groups = [{'groupname': project_obj.title}]
         add_zone_group_to_ad(project_obj.title)
@@ -690,7 +703,7 @@ class AllocationQueryMatch:
     def __init__(self, allocation, total_usage_entries, user_usage_entries):
         self.allocation = allocation
         self.volume = get_resource_starfish_name(allocation.get_parent_resource)
-        self.path = allocation.path
+        self.path = get_allocation_path(allocation)
         self.total_usage_entry = total_usage_entries[0]
         self.user_usage_entries = user_usage_entries
 
@@ -793,7 +806,8 @@ class UsageDataPipelineBase:
         allocations = self.allocations.prefetch_related(
             'project','allocationattribute_set', 'allocationuser_set')
         allocation_list = [
-            (get_resource_starfish_name(a.get_parent_resource), a.path) for a in allocations
+            (get_resource_starfish_name(a.get_parent_resource), get_allocation_path(a))
+            for a in allocations
         ]
         total_sort_key = itemgetter('path','volume')
         allocation_usage_grouped = return_dict_of_groupings(self.sf_usage_data, total_sort_key)
@@ -811,7 +825,7 @@ class UsageDataPipelineBase:
 
         allocationquerymatch_objs = []
         for allocation in allocations:
-            a = (str(allocation.path), str(get_resource_starfish_name(allocation.get_parent_resource)))
+            a = (str(get_allocation_path(allocation)), str(get_resource_starfish_name(allocation.get_parent_resource)))
             total_usage_entries = allocation_usage_grouped.get(a, None)
             user_usage_entries = user_usage_grouped.get(a, [])
             allocationquerymatch_objs.append(
@@ -857,7 +871,7 @@ class UsageDataPipelineBase:
         # 3. iterate across allocations
         for obj in self.allocationquerymatches:
             logger.debug('updating allocation %s %s (path %s)',
-                obj.lab, obj.volume, obj.allocation.path
+                obj.lab, obj.volume, obj.path
             )
             if obj.allocation.get_parent_resource.quantity_label == 'TB':
                 quota_size_attrtype = quota_tb_attrtype
@@ -975,8 +989,9 @@ class RESTDataPipeline(UsageDataPipelineBase):
                 continue
             if resource not in self.volumes:
                 continue
-            if allocation.path:
-                labs_resources[proj_name].append((vol_name, allocation.path))
+            allocation_path = get_allocation_path(allocation)
+            if allocation_path:
+                labs_resources[proj_name].append((vol_name, allocation_path))
         return labs_resources
 
     def check_volume_collection(self, lr):
@@ -1150,7 +1165,7 @@ def update_allocation(sender, **kwargs):
         return
     sf_redash_data = RedashDataPipeline(volume=volume_name)
     user_data, allocation_data = sf_redash_data.collect_sf_data_for_lab(
-        allocation.project.title, volume_name, allocation.path
+        allocation.project.title, volume_name, get_allocation_path(allocation)
     )
     if not allocation_data:
         logger.warning(

@@ -18,7 +18,7 @@ from django.core.management.base import BaseCommand
 from coldfront.config.base import DEBUG
 from coldfront.core.project.models import Project, ProjectAttributeType
 from coldfront.core.department.models import Department
-from sftocf.utils import StarFishServer, get_resource_starfish_name
+from sftocf.utils import StarFishServer, get_allocation_path, get_resource_starfish_name
 
 logger = logging.getLogger(__name__)
 class Command(BaseCommand):
@@ -95,7 +95,7 @@ class Command(BaseCommand):
                 # ensure the zone has all the paths and managing groups
                 zone_name = f"{dept.code}_Labs"
                 paths = [
-                    f"{get_resource_starfish_name(a.resources.first())}:{a.path}"
+                    f"{get_resource_starfish_name(a.resources.first())}:{get_allocation_path(a)}"
                     for p in dept.get_projects().filter(
                         status__name__in=['Active', 'New'],
                         )
@@ -103,7 +103,7 @@ class Command(BaseCommand):
                         status__name__in=['Active', 'Pending Deactivation'],
                         resources__in=resources
                     )
-                    if a.path
+                    if get_allocation_path(a)
                 ]
                 failed_paths = sf.update_zone(zone_name, paths=list(paths))
                 if failed_paths:
@@ -146,7 +146,7 @@ class Command(BaseCommand):
             # don't update if any paths are missing
             missing_paths = False
             for a in storage_allocations:
-                if a.path == '':
+                if get_allocation_path(a) == '':
                     missing_paths = True
                     report['allocations_missing_paths'].append(a.pk)
                     logger.error('Allocation %s (%s) has no path; cannot update zone until this is fixed',
@@ -155,7 +155,7 @@ class Command(BaseCommand):
                 continue
 
             update = False
-            paths = [f'{get_resource_starfish_name(a.resources.first())}:{a.path}' for a in storage_allocations] + zone_paths_not_in_cf
+            paths = [f'{get_resource_starfish_name(a.resources.first())}:{get_allocation_path(a)}' for a in storage_allocations] + zone_paths_not_in_cf
             if not set(paths) == set([p['vol_path'] for p in zone['vol_paths']]):
                 update = True
             else:
