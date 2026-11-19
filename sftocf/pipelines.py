@@ -152,22 +152,20 @@ class UsageDataPipelineBase:
             return self._allocationquerymatches
         allocations = self.allocations.prefetch_related(
             'project','allocationattribute_set', 'allocationuser_set')
-        allocation_list = [
+        allocation_set = {
             (get_resource_starfish_name(a.get_parent_resource), get_allocation_path(a))
             for a in allocations
-        ]
+        }
         total_sort_key = itemgetter('path','volume')
         allocation_usage_grouped = return_dict_of_groupings(self.sf_usage_data, total_sort_key)
         missing_allocations = [
-            (k,a) for k, a in allocation_usage_grouped if (a, k) not in allocation_list
+            (k,a) for k, a in allocation_usage_grouped if (a, k) not in allocation_set
         ]
         logger.warning('starfish allocations missing in coldfront: %s', missing_allocations)
 
         user_usage = [user for user in self.sf_user_data if user['path'] is not None]
         user_sort_key = itemgetter('path','volume')
         user_usage_grouped = return_dict_of_groupings(user_usage, user_sort_key)
-
-        missing_users = [u for k, u in user_usage_grouped.items() if k not in allocation_list]
 
         allocationquerymatch_objs = []
         for allocation in allocations:

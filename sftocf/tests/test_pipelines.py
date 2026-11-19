@@ -29,8 +29,13 @@ class CollectSfUserDataCacheTests(SimpleTestCase):
             pipelines, '_lab_usage_cache', FileBasedCache(self._tmpdir.name, {})
         )
         self._cache_patch.start()
+        # collect_sf_user_data only re-queries volumes present in svp['volumes'];
+        # a cache miss falls through to that check, so it needs 'vol1' in it.
+        self._svp_patch = patch.object(pipelines, 'svp', {'volumes': {'vol1': ('/lab', '/lab_l3')}})
+        self._svp_patch.start()
 
     def tearDown(self):
+        self._svp_patch.stop()
         self._cache_patch.stop()
         self._tmpdir.cleanup()
 
