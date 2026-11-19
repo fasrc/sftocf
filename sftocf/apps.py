@@ -6,4 +6,4 @@ class StarFishConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
 
     def ready(self):
-        import sftocf.signals  # noqa: F401
+        import sftocf.receivers  # noqa: F401

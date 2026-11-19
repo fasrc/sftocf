@@ -4,7 +4,8 @@ import pandas as pd
 from django.core.management.base import BaseCommand
 
 from coldfront.core.allocation.models import Allocation
-from sftocf.utils import StarFishRedash, StarFishServer, get_allocation_path, get_resource_starfish_name
+from sftocf.client import StarFishRedash, StarfishClient
+from sftocf.utils import get_allocation_path, get_resource_starfish_name
 from coldfront.core.utils.common import import_from_settings
 
 CENTER_BASE_URL = import_from_settings("CENTER_BASE_URL", "")
@@ -33,7 +34,7 @@ class Command(BaseCommand):
         subdir_results = redash.submit_query("subdirectory")
         data = subdir_results['query_result']['data']['rows']
         data = [result for result in data if result['group_name']]
-        starfishserver = StarFishServer()
+        starfishserver = StarfishClient()
         searched_resources = starfishserver.get_volumes_in_coldfront()
         allocations = [
             a for a in
@@ -45,7 +46,7 @@ class Command(BaseCommand):
             lab = allocation.project.title
             resource = allocation.get_parent_resource
             volume = get_resource_starfish_name(resource)
-            print(allocation.pk, lab, volume)
+            logger.debug('allocation_pk=%s lab=%s volume=%s', allocation.pk, lab, volume)
             matched_paths = [
                 entry for entry in data
                 if entry['group_name'].lower() == lab
@@ -78,8 +79,6 @@ class Command(BaseCommand):
             )
             confirmation = f"added path to allocation {allocation.pk}: {subdir_value}"
             logger.info(confirmation)
-            print(confirmation)
         for error in errors:
             logger.error("problem matching path for allocation: %s", error)
-            print(error)
         make_error_csv("errors_subdirs_to_add", errors)

@@ -16,9 +16,11 @@ from requests.exceptions import HTTPError
 from django.core.management.base import BaseCommand
 
 from coldfront.config.base import DEBUG
+from coldfront.core.allocation.models import Allocation
 from coldfront.core.project.models import Project, ProjectAttributeType
 from coldfront.core.department.models import Department
-from sftocf.utils import StarFishServer, get_allocation_path, get_resource_starfish_name
+from sftocf.client import StarfishClient
+from sftocf.utils import allocation_paths, get_allocation_path
 
 logger = logging.getLogger(__name__)
 class Command(BaseCommand):
@@ -48,7 +50,7 @@ class Command(BaseCommand):
             'updated_zone_groups': []
         }
 
-        sf = StarFishServer()
+        sf = StarfishClient()
         starfish_zone_attr_type = ProjectAttributeType.objects.get(name='Starfish Zone')
         resources = sf.get_corresponding_coldfront_resources()
         # collect all projects that have active allocations on Starfish
@@ -94,18 +96,12 @@ class Command(BaseCommand):
                 logger.info("updating zone for department %s", dept.code)
                 # ensure the zone has all the paths and managing groups
                 zone_name = f"{dept.code}_Labs"
-                paths = [
-                    f"{get_resource_starfish_name(a.resources.first())}:{get_allocation_path(a)}"
-                    for p in dept.get_projects().filter(
-                        status__name__in=['Active', 'New'],
-                        )
-                    for a in p.allocation_set.filter(
-                        status__name__in=['Active', 'Pending Deactivation'],
-                        resources__in=resources
-                    )
-                    if get_allocation_path(a)
-                ]
-                failed_paths = sf.update_zone(zone_name, paths=list(paths))
+                paths = allocation_paths(Allocation.objects.filter(
+                    project__in=dept.get_projects().filter(status__name__in=['Active', 'New']),
+                    status__name__in=['Active', 'Pending Deactivation'],
+                    resources__in=resources,
+                ))
+                failed_paths = sf.update_zone(zone_name, paths=paths)
                 if failed_paths:
                     report['failed_zone_paths'].append({
                         'zone': zone_name,
@@ -137,7 +133,7 @@ class Command(BaseCommand):
             try:
                 vol_paths = zone['vol_paths']
             except Exception as e:
-                logger.exception('problem identifying vol_paths for %s zone: %s', project.title, e)
+                logger.exception('Problem identifying vol_paths for zone. project=%s error=%s', project.title, e)
                 continue
             zone_paths_not_in_cf = [
                 p['vol_path'] for p in zone['vol_paths']
@@ -149,13 +145,15 @@ class Command(BaseCommand):
                 if get_allocation_path(a) == '':
                     missing_paths = True
                     report['allocations_missing_paths'].append(a.pk)
-                    logger.error('Allocation %s (%s) has no path; cannot update zone until this is fixed',
+                    logger.error(
+                        'Allocation has no path; cannot update zone until this is fixed. '
+                        'allocation_pk=%s allocation=%s',
                         a.pk, a)
             if missing_paths:
                 continue
 
             update = False
-            paths = [f'{get_resource_starfish_name(a.resources.first())}:{get_allocation_path(a)}' for a in storage_allocations] + zone_paths_not_in_cf
+            paths = allocation_paths(storage_allocations) + zone_paths_not_in_cf
             if not set(paths) == set([p['vol_path'] for p in zone['vol_paths']]):
                 update = True
             else:
@@ -175,7 +173,7 @@ class Command(BaseCommand):
                         failed_paths = sf.update_zone(
                             zone['name'], paths=paths, managing_groups=managing_groups)
                     except Exception as e:
-                        logger.error("error encountered when updating zone %s: %s", zone['name'], e)
+                        logger.error('Error encountered when updating zone. zone=%s error=%s', zone['name'], e)
                         report['zone_creation_errors'].append({
                             'zone': zone['name'],
                             'error': str(e),
@@ -244,7 +242,7 @@ class Command(BaseCommand):
             title__in=[p.title for p in projects_with_allocations]
         )
         for project in potential_delete_zone_attr_projs:
-            logger.info(project, project.pk)
+            logger.info('Checking project for zone deletion. project=%s project_pk=%s', project, project.pk)
             zone = sf.get_zones(project.sf_zone)
             zone_paths_not_in_cf = [
                 p['vol_path'] for p in zone['vol_paths']

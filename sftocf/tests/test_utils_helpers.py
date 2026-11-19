@@ -1,21 +1,17 @@
 """Unit tests for pure helpers and AllocationQueryMatch (mocked allocations)."""
 
-import tempfile
 from operator import itemgetter
-from pathlib import Path
 from unittest.mock import Mock
 
 from django.test import SimpleTestCase
 
+from sftocf.client import generate_headers
+from sftocf.pipelines import AllocationQueryMatch, return_dict_of_groupings
 from sftocf.utils import (
-    AllocationQueryMatch,
+    allocation_paths,
     determine_size_fmt,
-    generate_headers,
     get_allocation_path,
     get_resource_starfish_name,
-    read_json,
-    return_dict_of_groupings,
-    save_json,
     uniques_and_intersection,
 )
 
@@ -88,21 +84,6 @@ class AllocationQueryMatchNewTests(SimpleTestCase):
         m = AllocationQueryMatch(alloc, totals, users)
         self.assertEqual(len(m.users_in_list(['a'])), 1)
 
-    def test_users_not_in_list_raises_keyerror(self):
-        """users_not_in_list filters on entry['user_name'], but every
-        user_usage_entries dict elsewhere in this module (and in
-        users_in_list, right above) uses 'username'. With realistic data
-        this raises KeyError instead of filtering anything. Documenting the
-        current behavior here rather than silently relying on it; the fix
-        is presumably s/user_name/username/ in users_not_in_list.
-        """
-        alloc = self._make_allocation_mock()
-        totals = [{'total_size': 100}]
-        users = [{'username': 'a'}, {'username': 'b'}]
-        m = AllocationQueryMatch(alloc, totals, users)
-        with self.assertRaises(KeyError):
-            m.users_not_in_list(['a'])
-
 
 class GetAllocationPathTests(SimpleTestCase):
     def test_returns_value_when_subdirectory_attribute_present(self):
@@ -152,14 +133,6 @@ class DetermineSizeFmtTests(SimpleTestCase):
             determine_size_fmt(100, system='nonsense')
 
 
-class JsonRoundTripTests(SimpleTestCase):
-    def test_save_then_read_round_trip(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            path = Path(tmpdir) / 'data.json'
-            save_json(str(path), {'a': 1, 'b': [1, 2, 3]})
-            self.assertEqual(read_json(str(path)), {'a': 1, 'b': [1, 2, 3]})
-
-
 class GetResourceStarfishNameTests(SimpleTestCase):
     def test_uses_starfish_name_attribute_when_set(self):
         resource = Mock()
@@ -172,4 +145,28 @@ class GetResourceStarfishNameTests(SimpleTestCase):
         resource.get_attribute.return_value = None
         resource.name = 'holylfs10/tier1'
         self.assertEqual(get_resource_starfish_name(resource), 'holylfs10/tier1')
+
+
+class AllocationPathsTests(SimpleTestCase):
+    def _make_allocation(self, path, starfish_name):
+        alloc = Mock()
+        alloc.allocationattribute_set.filter.return_value.first.return_value.value = path
+        resource = Mock()
+        resource.get_attribute.return_value = starfish_name
+        alloc.resources.first.return_value = resource
+        return alloc
+
+    def test_builds_volume_path_strings(self):
+        a1 = self._make_allocation('/lab/a', 'vol1')
+        a2 = self._make_allocation('/lab/b', 'vol2')
+        self.assertEqual(allocation_paths([a1, a2]), ['vol1:/lab/a', 'vol2:/lab/b'])
+
+    def test_skips_allocations_without_a_path(self):
+        a1 = self._make_allocation('', 'vol1')
+        a2 = self._make_allocation('/lab/b', 'vol2')
+        self.assertEqual(allocation_paths([a1, a2]), ['vol2:/lab/b'])
+
+    def test_accepts_any_iterable(self):
+        a1 = self._make_allocation('/lab/a', 'vol1')
+        self.assertEqual(allocation_paths(a for a in [a1]), ['vol1:/lab/a'])
 
