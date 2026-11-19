@@ -5,12 +5,13 @@ import logging
 import requests
 
 from coldfront.core.utils.common import import_from_settings
+from coldfront.core.allocation.models import Allocation
 from coldfront.core.resource.models import Resource
 from coldfront.core.project.models import Project
 
 from sftocf.conf import SFURL
 from sftocf.signals import starfish_add_aduser, starfish_remove_aduser, starfish_add_adgroup
-from sftocf.utils import get_allocation_path, get_resource_starfish_name, record_process, uniques_and_intersection
+from sftocf.utils import allocation_paths, get_allocation_path, get_resource_starfish_name, record_process, uniques_and_intersection
 
 logger = logging.getLogger(__name__)
 
@@ -311,17 +312,11 @@ class StarFishServer:
     def zone_from_department(self, department_obj):
         """Create a zone from a department object"""
         zone_name = f"{department_obj.code}_Labs"
-        paths = [
-            f"{get_resource_starfish_name(a.resources.first())}:{get_allocation_path(a)}"
-            for p in department_obj.get_projects().filter(
-                status__name__in=['Active', 'New'],
-                )
-            for a in p.allocation_set.filter(
-                status__name='Active',
-                resources__in=self.get_corresponding_coldfront_resources()
-            )
-            if get_allocation_path(a)
-        ]
+        paths = allocation_paths(Allocation.objects.filter(
+            project__in=department_obj.get_projects().filter(status__name__in=['Active', 'New']),
+            status__name='Active',
+            resources__in=self.get_corresponding_coldfront_resources(),
+        ))
         approvers = list(
             department_obj.members.filter(role='Approver').values_list('user__username', flat=True)
         )
@@ -333,14 +328,10 @@ class StarFishServer:
     def zone_from_project(self, project_obj):
         """Create a zone from a project object"""
         zone_name = project_obj.title
-        paths = [
-            f"{get_resource_starfish_name(a.resources.first())}:{get_allocation_path(a)}"
-            for a in project_obj.allocation_set.filter(
-                status__name__in=['Active', 'Updated', 'Ready for Review'],
-                resources__in=self.get_corresponding_coldfront_resources()
-            )
-            if get_allocation_path(a)
-        ]
+        paths = allocation_paths(project_obj.allocation_set.filter(
+            status__name__in=['Active', 'Updated', 'Ready for Review'],
+            resources__in=self.get_corresponding_coldfront_resources()
+        ))
         managing_groups = [{'groupname': project_obj.title}]
         add_zone_group_to_ad(project_obj.title)
         return self.create_zone(zone_name, paths, [], managing_groups)

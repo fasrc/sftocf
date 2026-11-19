@@ -16,10 +16,11 @@ from requests.exceptions import HTTPError
 from django.core.management.base import BaseCommand
 
 from coldfront.config.base import DEBUG
+from coldfront.core.allocation.models import Allocation
 from coldfront.core.project.models import Project, ProjectAttributeType
 from coldfront.core.department.models import Department
 from sftocf.client import StarFishServer
-from sftocf.utils import get_allocation_path, get_resource_starfish_name
+from sftocf.utils import allocation_paths, get_allocation_path
 
 logger = logging.getLogger(__name__)
 class Command(BaseCommand):
@@ -95,18 +96,12 @@ class Command(BaseCommand):
                 logger.info("updating zone for department %s", dept.code)
                 # ensure the zone has all the paths and managing groups
                 zone_name = f"{dept.code}_Labs"
-                paths = [
-                    f"{get_resource_starfish_name(a.resources.first())}:{get_allocation_path(a)}"
-                    for p in dept.get_projects().filter(
-                        status__name__in=['Active', 'New'],
-                        )
-                    for a in p.allocation_set.filter(
-                        status__name__in=['Active', 'Pending Deactivation'],
-                        resources__in=resources
-                    )
-                    if get_allocation_path(a)
-                ]
-                failed_paths = sf.update_zone(zone_name, paths=list(paths))
+                paths = allocation_paths(Allocation.objects.filter(
+                    project__in=dept.get_projects().filter(status__name__in=['Active', 'New']),
+                    status__name__in=['Active', 'Pending Deactivation'],
+                    resources__in=resources,
+                ))
+                failed_paths = sf.update_zone(zone_name, paths=paths)
                 if failed_paths:
                     report['failed_zone_paths'].append({
                         'zone': zone_name,
@@ -158,7 +153,7 @@ class Command(BaseCommand):
                 continue
 
             update = False
-            paths = [f'{get_resource_starfish_name(a.resources.first())}:{get_allocation_path(a)}' for a in storage_allocations] + zone_paths_not_in_cf
+            paths = allocation_paths(storage_allocations) + zone_paths_not_in_cf
             if not set(paths) == set([p['vol_path'] for p in zone['vol_paths']]):
                 update = True
             else:

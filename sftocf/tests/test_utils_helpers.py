@@ -8,6 +8,7 @@ from django.test import SimpleTestCase
 from sftocf.client import generate_headers
 from sftocf.pipelines import AllocationQueryMatch, return_dict_of_groupings
 from sftocf.utils import (
+    allocation_paths,
     determine_size_fmt,
     get_allocation_path,
     get_resource_starfish_name,
@@ -144,4 +145,28 @@ class GetResourceStarfishNameTests(SimpleTestCase):
         resource.get_attribute.return_value = None
         resource.name = 'holylfs10/tier1'
         self.assertEqual(get_resource_starfish_name(resource), 'holylfs10/tier1')
+
+
+class AllocationPathsTests(SimpleTestCase):
+    def _make_allocation(self, path, starfish_name):
+        alloc = Mock()
+        alloc.allocationattribute_set.filter.return_value.first.return_value.value = path
+        resource = Mock()
+        resource.get_attribute.return_value = starfish_name
+        alloc.resources.first.return_value = resource
+        return alloc
+
+    def test_builds_volume_path_strings(self):
+        a1 = self._make_allocation('/lab/a', 'vol1')
+        a2 = self._make_allocation('/lab/b', 'vol2')
+        self.assertEqual(allocation_paths([a1, a2]), ['vol1:/lab/a', 'vol2:/lab/b'])
+
+    def test_skips_allocations_without_a_path(self):
+        a1 = self._make_allocation('', 'vol1')
+        a2 = self._make_allocation('/lab/b', 'vol2')
+        self.assertEqual(allocation_paths([a1, a2]), ['vol2:/lab/b'])
+
+    def test_accepts_any_iterable(self):
+        a1 = self._make_allocation('/lab/a', 'vol1')
+        self.assertEqual(allocation_paths(a for a in [a1]), ['vol1:/lab/a'])
 

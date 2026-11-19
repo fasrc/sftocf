@@ -43,8 +43,6 @@ def id_present_missing_users(username_list):
     return (present_users, missing_usernames)
 
 def uniques_and_intersection(list1, list2):
-    """Vendored from coldfront.core.utils.common, which isn't present on
-    every ColdFront fork this plugin targets."""
     intersection = list(set(list1) & set(list2))
     list1_unique = list(set(list1) - set(list2))
     list2_unique = list(set(list2) - set(list1))
@@ -83,3 +81,12 @@ def get_resource_starfish_name(resource):
     if starfish_name:
         return starfish_name
     return resource.name
+
+def allocation_paths(allocations):
+    """Return 'volume:path' Starfish path strings, skipping allocations with no path set."""
+    paths = []
+    for a in allocations:
+        path = get_allocation_path(a)
+        if path:
+            paths.append(f"{get_resource_starfish_name(a.resources.first())}:{path}")
+    return paths
