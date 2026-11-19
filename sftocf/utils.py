@@ -1,4 +1,3 @@
-import json
 import logging
 
 from django.contrib.auth import get_user_model
@@ -63,15 +62,6 @@ def get_allocation_path(allocation):
         allocation_attribute_type__name='Subdirectory'
     ).first()
     return attr.value if attr else ''
-
-def read_json(filepath):
-    with open(filepath, 'r') as json_file:
-        data = json.loads(json_file.read())
-    return data
-
-def save_json(file, contents):
-    with open(file, 'w') as fp:
-        json.dump(contents, fp, sort_keys=True, indent=4)
 
 def record_process(func):
     """Wrapper function for logging"""

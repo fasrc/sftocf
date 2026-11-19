@@ -2,10 +2,8 @@
 import logging
 from itertools import groupby
 from operator import itemgetter
-from pathlib import Path
 
-from datetime import datetime, timedelta
-
+from django.core.cache.backends.filebased import FileBasedCache
 from django.utils import timezone
 
 from coldfront.core.allocation.models import (
@@ -21,12 +19,20 @@ from sftocf.utils import (
     get_allocation_path,
     get_resource_starfish_name,
     id_present_missing_users,
-    read_json,
     record_process,
-    save_json,
 )
 
 logger = logging.getLogger(__name__)
+
+# Caches each lab's REST-collected usage data for a couple of days, so
+# re-running the pull command the same (or next) day doesn't re-query
+# Starfish for labs it already has fresh data for. A dedicated
+# FileBasedCache (rather than django.core.cache.cache) so this doesn't
+# depend on the host project's CACHES setting, while still persisting
+# across the separate processes a cron-triggered management command runs in
+# (unlike Django's default in-memory cache, which would reset every run).
+_lab_usage_cache = FileBasedCache(DATAPATH, {})
+_LAB_USAGE_CACHE_SECONDS = 60 * 60 * 24 * 2
 
 
 class AllocationQueryMatch:
@@ -333,46 +339,6 @@ class RESTDataPipeline(UsageDataPipelineBase):
                 labs_resources[proj_name].append((vol_name, allocation_path))
         return labs_resources
 
-    def check_volume_collection(self, lr):
-        """
-        for each lab-resource combination in parameter lr, check existence of
-        corresponding file in data path. If a file for that lab-resource
-        combination that is <2 days old exists, mark it as collected. If not,
-        slate lab-resource combination for collection.
-
-        Parameters
-        ----------
-        lr : dict
-            Keys are labnames, values are a list of (volume, tier) tuples.
-
-        Returns
-        -------
-        filepaths : list
-            List of lab usage files that have already been created.
-        to_collect : list
-            list of tuples - (labname, volume, tier, filename)
-        """
-        filepaths = []
-        to_collect = []
-        labs_resources = [(l, res) for l, r in lr.items() for res in r]
-        logger.debug('labs_resources:%s', labs_resources)
-
-        yesterdaystr = (datetime.today()-timedelta(1)).strftime("%Y%m%d")
-        dates = [yesterdaystr, DATESTR]
-
-        for lr_pair in labs_resources:
-            lab = lr_pair[0]
-            resource = lr_pair[1][0]
-            path = lr_pair[1][1]
-            fpath = f"{DATAPATH}{lab}_{resource}_{path.replace('/', '_')}.json"
-            if Path(fpath).exists():
-                file_json = read_json(fpath)
-                if file_json['date'] in dates:
-                    filepaths.append(fpath)
-            else:
-                to_collect.append((lab, resource, path, fpath,))
-        return filepaths, to_collect
-
     def return_usage_query_data(self, usage_query):
         try:
             data = usage_query.result
@@ -389,30 +355,49 @@ class RESTDataPipeline(UsageDataPipelineBase):
             'physical_nlinks_size_sum_hum', 'volume_display_name', 'count', 'fn']
 
     def collect_sf_user_data(self):
-        """Collect starfish data using the REST API. Return the results."""
+        """Collect starfish data using the REST API. Return the results.
+
+        Each lab's usage data is cached (see _lab_usage_cache above) so
+        re-running this the same or next day reuses what was already
+        collected instead of re-querying Starfish.
+        """
         # 1. produce dict of all labs to be collected & volumes on which their data is located
         lab_res = self.produce_lab_dict()
-        # 2. produce list of files collected & list of lab/volume/filename tuples to collect
-        filepaths, to_collect = self.check_volume_collection(lab_res)
+        labs_resources = [(lab, res) for lab, resources in lab_res.items() for res in resources]
+
+        # 2. serve whatever's already cached; collect the cache misses below
+        collected_data = []
+        to_collect = []
+        for lab, (volume, lab_volpath) in labs_resources:
+            cache_key = f'{lab}_{volume}_{lab_volpath}'
+            cached = _lab_usage_cache.get(cache_key)
+            if cached is None:
+                to_collect.append((lab, volume, lab_volpath, cache_key))
+                continue
+            for user in cached['contents']:
+                user.update({
+                    'volume': cached['volume'],
+                    'path': cached['path'],
+                    'project': cached['project'],
+                })
+                collected_data.append(user)
+
         # 3. produce set of all volumes to be queried
-        vol_set = {i[1] for i in to_collect}
+        vol_set = {t[1] for t in to_collect}
         vols = [vol for vol in vol_set if vol in svp['volumes']]
         for volume in vols:
             projects = [t for t in to_collect if t[1] == volume]
             logger.debug('volume=%s to_collect_subset=%s', volume, projects)
 
             ### OLD METHOD ###
-            for tup in projects:
-                p = tup[0]
-                filepath = tup[3]
-                lab_volpath = tup[2] #volumepath[0] if '_l3' not in p else volumepath[1]
-                logger.debug('filepath=%s lab=%s volpath=%s', filepath, p, lab_volpath)
+            for lab, _, lab_volpath, cache_key in projects:
+                logger.debug('lab=%s volpath=%s', lab, lab_volpath)
                 usage_query = self.connection_obj.create_query(
-                    f'groupname={p} type=f',
+                    f'groupname={lab} type=f',
                     'volume,username,groupname',
                     f'{volume}:{lab_volpath}',
                 )
-                data = self.return_usage_query_data(usage_query.result)
+                data = self.return_usage_query_data(usage_query)
                 if data:
                     contents = [d for d in data if d['username'] != 'root']
                     for entry in contents:
@@ -424,23 +409,14 @@ class RESTDataPipeline(UsageDataPipelineBase):
                         'server': self.connection_obj.name,
                         'volume': volume,
                         'path': lab_volpath,
-                        'project': p,
-                        'date': DATESTR,
+                        'project': lab,
                         'contents': contents,
                     }
-                    save_json(filepath, record)
-                    filepaths.append(filepath)
+                    _lab_usage_cache.set(cache_key, record, _LAB_USAGE_CACHE_SECONDS)
+                    for user in contents:
+                        user.update({'volume': volume, 'path': lab_volpath, 'project': lab})
+                        collected_data.append(user)
 
-        collected_data = []
-        for filepath in filepaths:
-            content = read_json(filepath)
-            for user in content['contents']:
-                user.update({
-                    'volume': content['volume'],
-                    'path': content['path'],
-                    'project': content['project'],
-                })
-                collected_data.append(user)
         return collected_data
 
     def collect_sf_usage_data(self):
@@ -468,7 +444,7 @@ class RESTDataPipeline(UsageDataPipelineBase):
                     f'{volume}:{lab_volpath}',
                     qformat='parent_path +aggrs.by_gid',
                 )
-                data = self.return_usage_query_data(usage_query.result)
+                data = self.return_usage_query_data(usage_query)
                 if data:
                     if len(data) > 1:
                         logger.error('Too many data entries. project=%s data=%s', p, data)

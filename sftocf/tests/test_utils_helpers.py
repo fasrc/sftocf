@@ -1,8 +1,6 @@
 """Unit tests for pure helpers and AllocationQueryMatch (mocked allocations)."""
 
-import tempfile
 from operator import itemgetter
-from pathlib import Path
 from unittest.mock import Mock
 
 from django.test import SimpleTestCase
@@ -13,8 +11,6 @@ from sftocf.utils import (
     determine_size_fmt,
     get_allocation_path,
     get_resource_starfish_name,
-    read_json,
-    save_json,
     uniques_and_intersection,
 )
 
@@ -134,14 +130,6 @@ class DetermineSizeFmtTests(SimpleTestCase):
     def test_invalid_system_raises(self):
         with self.assertRaises(Exception):
             determine_size_fmt(100, system='nonsense')
-
-
-class JsonRoundTripTests(SimpleTestCase):
-    def test_save_then_read_round_trip(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            path = Path(tmpdir) / 'data.json'
-            save_json(str(path), {'a': 1, 'b': [1, 2, 3]})
-            self.assertEqual(read_json(str(path)), {'a': 1, 'b': [1, 2, 3]})
 
 
 class GetResourceStarfishNameTests(SimpleTestCase):
