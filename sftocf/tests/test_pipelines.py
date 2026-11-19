@@ -58,8 +58,10 @@ class CollectSfUserDataCacheTests(SimpleTestCase):
         pipeline.return_usage_query_data.assert_called_once_with(
             pipeline.connection_obj.create_query.return_value
         )
+        # the cache stores the raw per-user records as returned by the API,
+        # before collect_sf_user_data enriches them with volume/path/project
         cached = pipelines._lab_usage_cache.get('lab_a_vol1_/lab/a')
-        self.assertEqual(cached['contents'], data)
+        self.assertEqual(cached['contents'], [{'username': 'alice', 'size_sum': 100}])
 
     def test_cache_hit_skips_api_query(self):
         pipeline = _make_pipeline()
