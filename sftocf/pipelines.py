@@ -14,12 +14,9 @@ from coldfront.core.allocation.models import (
     AllocationUserStatusChoice,
 )
 
+from sftocf.client import StarFishRedash, StarFishServer
+from sftocf.conf import DATAPATH, DATESTR, PENDING_ACTIVE_ALLOCATION_STATUSES, svp, username_ignore_list
 from sftocf.utils import (
-    DATAPATH,
-    DATESTR,
-    PENDING_ACTIVE_ALLOCATION_STATUSES,
-    StarFishRedash,
-    StarFishServer,
     determine_size_fmt,
     get_allocation_path,
     get_resource_starfish_name,
@@ -27,8 +24,6 @@ from sftocf.utils import (
     read_json,
     record_process,
     save_json,
-    svp,
-    username_ignore_list,
 )
 
 logger = logging.getLogger(__name__)

@@ -4,7 +4,8 @@ import pandas as pd
 from django.core.management.base import BaseCommand
 
 from coldfront.core.allocation.models import Allocation
-from sftocf.utils import StarFishRedash, StarFishServer, get_allocation_path, get_resource_starfish_name
+from sftocf.client import StarFishRedash, StarFishServer
+from sftocf.utils import get_allocation_path, get_resource_starfish_name
 from coldfront.core.utils.common import import_from_settings
 
 CENTER_BASE_URL = import_from_settings("CENTER_BASE_URL", "")

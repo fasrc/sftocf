@@ -18,7 +18,8 @@ from django.core.management.base import BaseCommand
 from coldfront.config.base import DEBUG
 from coldfront.core.project.models import Project, ProjectAttributeType
 from coldfront.core.department.models import Department
-from sftocf.utils import StarFishServer, get_allocation_path, get_resource_starfish_name
+from sftocf.client import StarFishServer
+from sftocf.utils import get_allocation_path, get_resource_starfish_name
 
 logger = logging.getLogger(__name__)
 class Command(BaseCommand):

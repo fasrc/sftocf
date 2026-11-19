@@ -7,10 +7,10 @@ from unittest.mock import Mock
 
 from django.test import SimpleTestCase
 
+from sftocf.client import generate_headers
 from sftocf.pipelines import AllocationQueryMatch, return_dict_of_groupings
 from sftocf.utils import (
     determine_size_fmt,
-    generate_headers,
     get_allocation_path,
     get_resource_starfish_name,
     read_json,

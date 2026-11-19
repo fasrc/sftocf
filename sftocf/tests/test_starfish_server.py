@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 from django.test import SimpleTestCase, override_settings
 
-from sftocf.utils import AsyncQuery, StarFishServer
+from sftocf.client import AsyncQuery, StarFishServer
 
 
 def _make_server():
