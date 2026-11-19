@@ -10,17 +10,20 @@ You need **ColdFront** and **sftocf** in the same Python environment (same virtu
 
 ### From GitHub (recommended today)
 
-Install the latest default branch into your environment:
+Pin to a [tagged release](https://github.com/fasrc/sftocf/releases) for
+reproducible deploys — see [CHANGELOG.md](./CHANGELOG.md) for what's in
+each one:
+
+```bash
+pip install "git+https://github.com/fasrc/sftocf.git@v1.0.0"
+```
+
+Installing `main` directly gets you whatever's currently merged, with no
+version to refer back to later:
 
 ```bash
 pip install "git+https://github.com/fasrc/sftocf.git"
-```
-
-Pin a branch, tag, or commit for reproducible deploys:
-
-```bash
-pip install "git+https://github.com/fasrc/sftocf.git@main"
-# or: .../sftocf.git@<tag-or-commit>
+# or: .../sftocf.git@<branch-or-commit>
 ```
 
 ### From a local clone (development)
