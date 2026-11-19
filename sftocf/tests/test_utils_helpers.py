@@ -87,21 +87,6 @@ class AllocationQueryMatchNewTests(SimpleTestCase):
         m = AllocationQueryMatch(alloc, totals, users)
         self.assertEqual(len(m.users_in_list(['a'])), 1)
 
-    def test_users_not_in_list_raises_keyerror(self):
-        """users_not_in_list filters on entry['user_name'], but every
-        user_usage_entries dict elsewhere in this module (and in
-        users_in_list, right above) uses 'username'. With realistic data
-        this raises KeyError instead of filtering anything. Documenting the
-        current behavior here rather than silently relying on it; the fix
-        is presumably s/user_name/username/ in users_not_in_list.
-        """
-        alloc = self._make_allocation_mock()
-        totals = [{'total_size': 100}]
-        users = [{'username': 'a'}, {'username': 'b'}]
-        m = AllocationQueryMatch(alloc, totals, users)
-        with self.assertRaises(KeyError):
-            m.users_not_in_list(['a'])
-
 
 class GetAllocationPathTests(SimpleTestCase):
     def test_returns_value_when_subdirectory_attribute_present(self):

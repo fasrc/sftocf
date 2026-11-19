@@ -95,10 +95,6 @@ class AllocationQueryMatch:
         """return usage entries for users with usernames in the provided list"""
         return [u for u in self.user_usage_entries if u['username'] in username_list]
 
-    def users_not_in_list(self, username_list):
-        """return usage entries for users with usernames not in the provided list"""
-        return [u for u in self.user_usage_entries if u['user_name'] not in username_list]
-
 def return_dict_of_groupings(dict_list, sort_key):
     """Given a list of dicts, return a dict of lists of dicts grouped by the
     key(s) given in sort_key.
