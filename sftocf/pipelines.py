@@ -348,6 +348,19 @@ class RESTDataPipeline(UsageDataPipelineBase):
         return ['size_sum_hum', 'rec_aggrs', 'physical_nlinks_size_sum',
             'physical_nlinks_size_sum_hum', 'volume_display_name', 'count', 'fn']
 
+    def _lab_volume_paths(self):
+        """Flatten produce_lab_dict() into (lab, volume, path) triples,
+        along with the subset of volumes present in SF_VOLUME_MAPPING
+        """
+        lab_res = self.produce_lab_dict()
+        triples = [
+            (lab, volume, path)
+            for lab, pairs in lab_res.items()
+            for volume, path in pairs
+        ]
+        vols = [v for v in {t[1] for t in triples} if v in svp['volumes']]
+        return triples, vols
+
     def collect_sf_user_data(self):
         """Collect starfish data using the REST API. Return the results.
 
@@ -355,14 +368,12 @@ class RESTDataPipeline(UsageDataPipelineBase):
         re-running this the same or next day reuses what was already
         collected instead of re-querying Starfish.
         """
-        # 1. produce dict of all labs to be collected & volumes on which their data is located
-        lab_res = self.produce_lab_dict()
-        labs_resources = [(lab, res) for lab, resources in lab_res.items() for res in resources]
+        triples, vols = self._lab_volume_paths()
 
-        # 2. serve whatever's already cached; collect the cache misses below
+        # serve whatever's already cached; collect the cache misses below
         collected_data = []
         to_collect = []
-        for lab, (volume, lab_volpath) in labs_resources:
+        for lab, volume, lab_volpath in triples:
             cache_key = f'{lab}_{volume}_{lab_volpath}'
             cached = _lab_usage_cache.get(cache_key)
             if cached is None:
@@ -376,9 +387,6 @@ class RESTDataPipeline(UsageDataPipelineBase):
                 })
                 collected_data.append(user)
 
-        # 3. produce set of all volumes to be queried
-        vol_set = {t[1] for t in to_collect}
-        vols = [vol for vol in vol_set if vol in svp['volumes']]
         for volume in vols:
             projects = [t for t in to_collect if t[1] == volume]
             logger.debug('volume=%s to_collect_subset=%s', volume, projects)
@@ -394,8 +402,6 @@ class RESTDataPipeline(UsageDataPipelineBase):
                 if data:
                     contents = [d for d in data if d['username'] != 'root']
                     for entry in contents:
-                        # entry['size_sum'] = entry['rec_aggrs']['size']
-                        # entry['full_path'] = entry['parent_path']+'/'+entry['fn']
                         for item in self.items_to_pop:
                             entry.pop(item, None)
                     record = {
@@ -414,24 +420,18 @@ class RESTDataPipeline(UsageDataPipelineBase):
 
     def collect_sf_usage_data(self):
         """Collect usage data from starfish for all labs in the lab list."""
-        # 1. produce dict of all labs to be collected & volumes on which their data is located
-        lab_res = self.produce_lab_dict()
-        lab_res = [(k, i[0], i[1]) for k, v in lab_res.items() for i in v]
-        # 2. produce set of all volumes to be queried
-        vol_set = {i[1] for i in lab_res}
-        vols = [vol for vol in vol_set if vol in svp['volumes']]
+        triples, vols = self._lab_volume_paths()
         entries = []
         for volume in vols:
             volumepath = svp['volumes'][volume]
-            projects = [t for t in lab_res if t[1] == volume]
+            projects = [t for t in triples if t[1] == volume]
             logger.debug('volume=%s to_collect_subset=%s', volume, projects)
 
-            for tup in projects:
-                p = tup[0]
-                lab_volpath = volumepath[0] if '_l3' not in p else volumepath[1]
-                logger.debug('lab=%s volpath=%s', p, lab_volpath)
+            for lab, _, _ in projects:
+                lab_volpath = volumepath[0] if '_l3' not in lab else volumepath[1]
+                logger.debug('lab=%s volpath=%s', lab, lab_volpath)
                 usage_query = self.connection_obj.create_query(
-                    f'groupname={p} type=d depth=1',
+                    f'groupname={lab} type=d depth=1',
                     'volume,parent_path,groupname,rec_aggrs.size,fn',
                     f'{volume}:{lab_volpath}',
                     qformat='parent_path +aggrs.by_gid',
@@ -439,7 +439,7 @@ class RESTDataPipeline(UsageDataPipelineBase):
                 data = self.return_usage_query_data(usage_query)
                 if data:
                     if len(data) > 1:
-                        logger.error('Too many data entries. project=%s data=%s', p, data)
+                        logger.error('Too many data entries. project=%s data=%s', lab, data)
                         continue
                     entry = data[0]
                     entry.update({
@@ -448,7 +448,7 @@ class RESTDataPipeline(UsageDataPipelineBase):
                         'server': self.connection_obj.name,
                         'volume': volume,
                         'path': lab_volpath,
-                        'project': p,
+                        'project': lab,
                         'date': DATESTR,
                     })
                     for item in self.items_to_pop:

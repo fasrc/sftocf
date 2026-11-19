@@ -113,6 +113,72 @@ class CollectSfUserDataCacheTests(SimpleTestCase):
         self.assertIsNone(pipelines._lab_usage_cache.get('lab_a_vol1_/lab/a'))
 
 
+class LabVolumePathsTests(SimpleTestCase):
+    """_lab_volume_paths() is the piece collect_sf_user_data and
+    collect_sf_usage_data share: flatten produce_lab_dict() and filter to
+    the volumes configured in SF_VOLUME_MAPPING."""
+
+    def setUp(self):
+        self._svp_patch = patch.object(pipelines, 'svp', {'volumes': {'vol1': ('/lab', '/lab_l3')}})
+        self._svp_patch.start()
+
+    def tearDown(self):
+        self._svp_patch.stop()
+
+    def test_flattens_and_filters_to_configured_volumes(self):
+        pipeline = _make_pipeline()
+        pipeline.produce_lab_dict = Mock(return_value={
+            'lab_a': [('vol1', '/lab/a')],
+            'lab_b': [('vol2', '/lab/b')],  # vol2 isn't in svp['volumes']
+        })
+
+        triples, vols = pipeline._lab_volume_paths()
+
+        self.assertEqual(set(triples), {('lab_a', 'vol1', '/lab/a'), ('lab_b', 'vol2', '/lab/b')})
+        self.assertEqual(vols, ['vol1'])
+
+
+class CollectSfUsageDataTests(SimpleTestCase):
+    """collect_sf_usage_data builds one aggregate usage entry per lab from
+    the REST API's directory-query results."""
+
+    def setUp(self):
+        self._svp_patch = patch.object(pipelines, 'svp', {'volumes': {'vol1': ('/lab', '/lab_l3')}})
+        self._svp_patch.start()
+
+    def tearDown(self):
+        self._svp_patch.stop()
+
+    def test_builds_entry_from_query_result(self):
+        pipeline = _make_pipeline()
+        pipeline.produce_lab_dict = Mock(return_value={'lab_a': [('vol1', '/lab/a')]})
+        pipeline.return_usage_query_data = Mock(return_value=[{
+            'rec_aggrs': {'size': 12345},
+            'parent_path': '/some/parent',
+            'fn': 'lab_a',
+            'size_sum_hum': '12K', 'physical_nlinks_size_sum': 1,
+            'physical_nlinks_size_sum_hum': '1', 'volume_display_name': 'v', 'count': 1,
+        }])
+
+        entries = pipeline.collect_sf_usage_data()
+
+        self.assertEqual(len(entries), 1)
+        entry = entries[0]
+        self.assertEqual(entry['size_sum'], 12345)
+        self.assertEqual(entry['full_path'], '/some/parent/lab_a')
+        self.assertEqual(entry['volume'], 'vol1')
+        self.assertEqual(entry['project'], 'lab_a')
+        for stripped in pipeline.items_to_pop:
+            self.assertNotIn(stripped, entry)
+
+    def test_multiple_results_for_one_lab_are_skipped(self):
+        pipeline = _make_pipeline()
+        pipeline.produce_lab_dict = Mock(return_value={'lab_a': [('vol1', '/lab/a')]})
+        pipeline.return_usage_query_data = Mock(return_value=[{'fn': 'a'}, {'fn': 'b'}])
+
+        self.assertEqual(pipeline.collect_sf_usage_data(), [])
+
+
 class ReturnUsageQueryDataTests(SimpleTestCase):
     """return_usage_query_data takes the AsyncQuery-like object itself, not
     its already-resolved .result: it accesses .result internally and needs
