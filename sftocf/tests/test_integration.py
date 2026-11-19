@@ -17,7 +17,8 @@ from coldfront.core.test_helpers.factories import (
     ResourceFactory,
     UserFactory,
 )
-from sftocf.utils import AllocationQueryMatch, get_allocation_path
+from sftocf.pipelines import AllocationQueryMatch
+from sftocf.utils import get_allocation_path
 
 _FIXTURE_JSON_DIR = Path(__file__).resolve().parent.parent / 'fixture_data'
 

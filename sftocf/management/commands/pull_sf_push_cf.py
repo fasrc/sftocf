@@ -3,7 +3,7 @@ import logging
 
 from django.core.management.base import BaseCommand
 
-from sftocf.utils import RESTDataPipeline, RedashDataPipeline
+from sftocf.pipelines import RESTDataPipeline, RedashDataPipeline
 
 logger = logging.getLogger(__name__)
 
