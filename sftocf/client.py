@@ -8,11 +8,17 @@ from coldfront.core.utils.common import import_from_settings
 from coldfront.core.resource.models import Resource
 from coldfront.core.project.models import Project
 
-from sftocf.conf import SFURL, STORAGE_RESOURCES
+from sftocf.conf import SFURL
 from sftocf.signals import starfish_add_aduser, starfish_remove_aduser, starfish_add_adgroup
 from sftocf.utils import get_allocation_path, get_resource_starfish_name, record_process, uniques_and_intersection
 
 logger = logging.getLogger(__name__)
+
+
+def get_storage_resources():
+    """Return the current set of available Storage resources.
+    """
+    return Resource.objects.filter(resource_type__name='Storage', is_available=True)
 
 
 def zone_report():
@@ -329,14 +335,14 @@ class StarFishServer:
 
     def get_corresponding_coldfront_resources(self):
         matching_pks = [
-            r.pk for r in STORAGE_RESOURCES
+            r.pk for r in get_storage_resources()
             if any(volume == get_resource_starfish_name(r) for volume in self.volumes)
         ]
         return Resource.objects.filter(pk__in=matching_pks)
 
     def get_volumes_in_coldfront(self):
         resource_volume_list = [
-            get_resource_starfish_name(r) for r in STORAGE_RESOURCES
+            get_resource_starfish_name(r) for r in get_storage_resources()
         ]
         return [v for v in self.volumes if v in resource_volume_list]
 
@@ -461,7 +467,7 @@ class StarFishRedash:
     def get_corresponding_coldfront_resources(self):
         volumes = [r['vol'] for r in self.get_vol_stats()]
         matching_pks = [
-            r.pk for r in STORAGE_RESOURCES
+            r.pk for r in get_storage_resources()
             if any(volume in get_resource_starfish_name(r) for volume in volumes)
         ]
         return Resource.objects.filter(pk__in=matching_pks)
@@ -479,7 +485,7 @@ class StarFishRedash:
         result = [{
             k.replace(' ', '_').replace('(','').replace(')','') : v for k, v in d.items()
         } for d in result]
-        resource_names = [get_resource_starfish_name(r) for r in STORAGE_RESOURCES]
+        resource_names = [get_resource_starfish_name(r) for r in get_storage_resources()]
         result = [r for r in result if r['vol'] in resource_names]
         return result
 

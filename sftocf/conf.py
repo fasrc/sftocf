@@ -4,7 +4,6 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-from coldfront.core.resource.models import Resource
 from coldfront.core.utils.common import import_from_settings
 
 _PLUGIN_ROOT = Path(__file__).resolve().parent
@@ -15,7 +14,6 @@ DATAPATH = import_from_settings('SFTOCF_DATAPATH', _DEFAULT_DATAPATH)
 SFURL = import_from_settings('SFURL', 'starfish')
 PENDING_ACTIVE_ALLOCATION_STATUSES = import_from_settings(
     'PENDING_ACTIVE_ALLOCATION_STATUSES', ['Active', 'New', 'In Progress', 'On Hold'])
-STORAGE_RESOURCES = Resource.objects.filter(resource_type__name='Storage', is_available=True)
 
 svp = json.loads(import_from_settings('SF_VOLUME_MAPPING', '{}'))
 
