@@ -46,7 +46,7 @@ class Command(BaseCommand):
             lab = allocation.project.title
             resource = allocation.get_parent_resource
             volume = get_resource_starfish_name(resource)
-            print(allocation.pk, lab, volume)
+            logger.debug('allocation_pk=%s lab=%s volume=%s', allocation.pk, lab, volume)
             matched_paths = [
                 entry for entry in data
                 if entry['group_name'].lower() == lab
@@ -79,8 +79,6 @@ class Command(BaseCommand):
             )
             confirmation = f"added path to allocation {allocation.pk}: {subdir_value}"
             logger.info(confirmation)
-            print(confirmation)
         for error in errors:
             logger.error("problem matching path for allocation: %s", error)
-            print(error)
         make_error_csv("errors_subdirs_to_add", errors)

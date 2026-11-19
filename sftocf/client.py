@@ -64,7 +64,6 @@ def zone_report():
     ]
     report_nums = {k: len(v) for k, v in report.items()}
     for r in [report, report_nums]:
-        print(r)
         logger.warning(r)
 
 def allocation_to_zone(allocation):
@@ -94,24 +93,21 @@ def add_zone_manager_to_ad(username):
     try:
         starfish_add_aduser.send_robust(sender='sftocf', username=username)
     except Exception as e:
-        print(f'Error adding {username} to starfish_users: {e}')
-        logger.exception('Error adding %s to starfish_users: %s', username, e)
+        logger.exception('Error adding user to starfish_users. username=%s error=%s', username, e)
         raise
 
 def add_zone_group_to_ad(group_name):
     try:
         starfish_add_adgroup.send_robust(sender='sftocf', groupname=group_name)
     except Exception as e:
-        print(f'Error adding {group_name} to starfish_users: {e}')
-        logger.exception('Error adding %s to starfish_users: %s', group_name, e)
+        logger.exception('Error adding group to starfish_users. groupname=%s error=%s', group_name, e)
         raise
 
 def remove_zone_member_from_ad(username):
     try:
         starfish_remove_aduser.send_robust(sender='sftocf', username=username)
     except Exception as e:
-        print(f'Error removing {username} from starfish_users: {e}')
-        logger.exception('Error removing %s from starfish_users: %s', username, e)
+        logger.exception('Error removing user from starfish_users. username=%s error=%s', username, e)
         raise
 
 
@@ -278,11 +274,11 @@ class StarFishServer:
         try:
             return_patch_json(url, data=data, headers=self.headers)
         except Exception as e:
-            logger.warning('Error adding paths to zone %s: %s', zone['name'], e)
+            logger.warning('Error adding paths to zone. zone=%s error=%s', zone['name'], e)
             existing_paths = [p['vol_path'] for p in self.get_zone_paths(zone_id)]
             paths_to_remove = [p for p in existing_paths if p not in paths]
             if paths_to_remove:
-                logger.warning('Removing paths from zone %s: %s', zone['name'], paths_to_remove)
+                logger.warning('Removing paths from zone. zone=%s paths=%s', zone['name'], paths_to_remove)
                 new_paths = [p for p in existing_paths if p not in paths_to_remove]
                 return_patch_json(url, data={'delete': paths_to_remove}, headers=self.headers)
 
@@ -294,7 +290,7 @@ class StarFishServer:
                         existing_paths.append(path)
                     except Exception as e:
                         logger.warning(
-                            'Error adding path %s to zone %s: %s', path, zone['name'], e)
+                            'Error adding path to zone. path=%s zone=%s error=%s', path, zone['name'], e)
                         failed_paths.append(path)
         self._zones_cache = None
         return failed_paths
@@ -451,7 +447,7 @@ class StarFishServer:
         if not data:
             logger.warning('No starfish result for query %s', query)
         elif isinstance(data, dict) and 'error' in data:
-            logger.warning('Error in starfish result for query %s:\n%s', query, data)
+            logger.warning('Error in starfish result for query. query=%s data=%s', query, data)
         return query
 
     @record_process

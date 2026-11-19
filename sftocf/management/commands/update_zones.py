@@ -138,7 +138,7 @@ class Command(BaseCommand):
             try:
                 vol_paths = zone['vol_paths']
             except Exception as e:
-                logger.exception('problem identifying vol_paths for %s zone: %s', project.title, e)
+                logger.exception('Problem identifying vol_paths for zone. project=%s error=%s', project.title, e)
                 continue
             zone_paths_not_in_cf = [
                 p['vol_path'] for p in zone['vol_paths']
@@ -150,7 +150,9 @@ class Command(BaseCommand):
                 if get_allocation_path(a) == '':
                     missing_paths = True
                     report['allocations_missing_paths'].append(a.pk)
-                    logger.error('Allocation %s (%s) has no path; cannot update zone until this is fixed',
+                    logger.error(
+                        'Allocation has no path; cannot update zone until this is fixed. '
+                        'allocation_pk=%s allocation=%s',
                         a.pk, a)
             if missing_paths:
                 continue
@@ -176,7 +178,7 @@ class Command(BaseCommand):
                         failed_paths = sf.update_zone(
                             zone['name'], paths=paths, managing_groups=managing_groups)
                     except Exception as e:
-                        logger.error("error encountered when updating zone %s: %s", zone['name'], e)
+                        logger.error('Error encountered when updating zone. zone=%s error=%s', zone['name'], e)
                         report['zone_creation_errors'].append({
                             'zone': zone['name'],
                             'error': str(e),
@@ -245,7 +247,7 @@ class Command(BaseCommand):
             title__in=[p.title for p in projects_with_allocations]
         )
         for project in potential_delete_zone_attr_projs:
-            logger.info(project, project.pk)
+            logger.info('Checking project for zone deletion. project=%s project_pk=%s', project, project.pk)
             zone = sf.get_zones(project.sf_zone)
             zone_paths_not_in_cf = [
                 p['vol_path'] for p in zone['vol_paths']

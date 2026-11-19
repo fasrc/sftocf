@@ -41,7 +41,6 @@ class AllocationQueryMatch:
         elif len(total_usage_entries) > 1:
             msg = f'too many total_usage_entries for allocation {allocation_data}; investigation required'
         if msg:
-            print(msg)
             logger.warning(msg)
             return None
         return super().__new__(cls)
@@ -156,7 +155,6 @@ class UsageDataPipelineBase:
         missing_allocations = [
             (k,a) for k, a in allocation_usage_grouped if (a, k) not in allocation_list
         ]
-        print("missing_allocations:", missing_allocations)
         logger.warning('starfish allocations missing in coldfront: %s', missing_allocations)
 
         user_usage = [user for user in self.sf_user_data if user['path'] is not None]
@@ -212,7 +210,7 @@ class UsageDataPipelineBase:
         quota_tb_attrtype = allocation_attribute_types.get(name='Storage Quota (TB)')
         # 3. iterate across allocations
         for obj in self.allocationquerymatches:
-            logger.debug('updating allocation %s %s (path %s)',
+            logger.debug('Updating allocation. lab=%s volume=%s path=%s',
                 obj.lab, obj.volume, obj.path
             )
             if obj.allocation.get_parent_resource.quantity_label == 'TB':
@@ -222,7 +220,7 @@ class UsageDataPipelineBase:
             obj.update_usage_attr(quota_b_attrtype, obj.total_usage_entry['total_size'])
             obj.update_usage_attr(quota_size_attrtype, obj.total_usage_tib)
 
-            logger.info('allocation usage for allocation %s: %s bytes, %s terabytes',
+            logger.info('Allocation usage updated. allocation_pk=%s bytes=%s terabytes=%s',
                 obj.allocation.pk, obj.total_usage_entry['total_size'], obj.total_usage_tib
             )
             # identify and remove allocation users that are no longer in the AD group
@@ -247,7 +245,7 @@ class UsageDataPipelineBase:
         )
         if allocationusers_not_in_redash:
             logger.info(
-                'users no longer in allocation %s: %s',
+                'Users no longer in allocation. allocation_pk=%s users=%s',
                 allocation.pk, [user.user.username for user in allocationusers_not_in_redash]
             )
             allocationusers_not_in_redash.update(usage=0, usage_bytes=0)
@@ -326,7 +324,6 @@ class RESTDataPipeline(UsageDataPipelineBase):
                 vol_name = get_resource_starfish_name(resource)
             else:
                 message = f'no resource for allocation owned by {proj_name}'
-                print(message)
                 logger.error(message)
                 continue
             if resource not in self.volumes:
@@ -402,14 +399,14 @@ class RESTDataPipeline(UsageDataPipelineBase):
         vols = [vol for vol in vol_set if vol in svp['volumes']]
         for volume in vols:
             projects = [t for t in to_collect if t[1] == volume]
-            logger.debug('vol: %s\nto_collect_subset: %s', volume, projects)
+            logger.debug('volume=%s to_collect_subset=%s', volume, projects)
 
             ### OLD METHOD ###
             for tup in projects:
                 p = tup[0]
                 filepath = tup[3]
                 lab_volpath = tup[2] #volumepath[0] if '_l3' not in p else volumepath[1]
-                logger.debug('filepath: %s lab: %s volpath: %s', filepath, p, lab_volpath)
+                logger.debug('filepath=%s lab=%s volpath=%s', filepath, p, lab_volpath)
                 usage_query = self.connection_obj.create_query(
                     f'groupname={p} type=f',
                     'volume,username,groupname',
@@ -458,13 +455,13 @@ class RESTDataPipeline(UsageDataPipelineBase):
         for volume in vols:
             volumepath = svp['volumes'][volume]
             projects = [t for t in lab_res if t[1] == volume]
-            logger.debug('vol: %s\nto_collect_subset: %s', volume, projects)
+            logger.debug('volume=%s to_collect_subset=%s', volume, projects)
 
             ### OLD METHOD ###
             for tup in projects:
                 p = tup[0]
                 lab_volpath = volumepath[0] if '_l3' not in p else volumepath[1]
-                logger.debug('lab: %s volpath: %s', p, lab_volpath)
+                logger.debug('lab=%s volpath=%s', p, lab_volpath)
                 usage_query = self.connection_obj.create_query(
                     f'groupname={p} type=d depth=1',
                     'volume,parent_path,groupname,rec_aggrs.size,fn',
@@ -474,7 +471,7 @@ class RESTDataPipeline(UsageDataPipelineBase):
                 data = self.return_usage_query_data(usage_query.result)
                 if data:
                     if len(data) > 1:
-                        logger.error('too many data entries for %s: %s', p, data)
+                        logger.error('Too many data entries. project=%s data=%s', p, data)
                         continue
                     entry = data[0]
                     entry.update({

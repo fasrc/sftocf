@@ -23,7 +23,7 @@ def update_allocation(sender, **kwargs):
     server = StarFishServer()
     if volume_name not in server.volumes:
         logger.warning(
-            'allocation %s on volume %s not in Starfish volumes; skipping allocation update',
+            'Allocation not in Starfish volumes; skipping allocation update. allocation_pk=%s volume=%s',
             allocation.pk, volume_name
         )
         return
@@ -33,7 +33,8 @@ def update_allocation(sender, **kwargs):
     )
     if not allocation_data:
         logger.warning(
-            "No matching allocation found for the given data: %s %s", allocation.project.title, volume_name
+            'No matching allocation found for the given data. project=%s volume=%s',
+            allocation.project.title, volume_name
         )
         return
 
@@ -69,7 +70,7 @@ def update_allocation(sender, **kwargs):
         usage, unit = determine_size_fmt(userdict['size_sum'])
         allocation_query_match.update_user_usage(user, usage_bytes, usage, unit)
     logger.info(
-        'allocation %s on volume %s updated with usage data; total usage: %s bytes, %s terabytes',
+        'Allocation updated with usage data. allocation_pk=%s volume=%s bytes=%s terabytes=%s',
         allocation.pk, volume_name, allocation_query_match.total_usage_entry['total_size'],
         allocation_query_match.total_usage_tib
     )
