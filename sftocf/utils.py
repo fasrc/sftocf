@@ -364,7 +364,6 @@ class StarFishServer:
         response = return_get_json(url, self.headers)
         return response
 
-
     def update_zone_paths(self, zone_id, paths):
         """Update paths in a zone via the API
 
@@ -396,6 +395,19 @@ class StarFishServer:
                             'Error adding path %s to zone %s: %s', path, zone['name'], e)
                         failed_paths.append(path)
         return failed_paths
+
+    def get_zone_user_params(self, zone_id):
+        """Get zone user params via the API"""
+        url = self.api_url + f'v2/zones/{zone_id}/zone_user_params/'
+        response = return_get_json(url, self.headers)
+        return response
+
+    def update_zone_user_param(self, zone_id, param_name, param_value):
+        """Update zone user params via the API"""
+        url = self.api_url + f'v2/zones/{zone_id}/zone_user_params/{param_name}/'
+        data = param_value
+        response = return_patch_json(url, data=data, headers=self.headers)
+        return response
 
     def zone_from_department(self, department_obj):
         """Create a zone from a department object"""
