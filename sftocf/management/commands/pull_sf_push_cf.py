@@ -27,8 +27,8 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **kwargs):
-        volume = volume = kwargs['volume']
-        pulltype = pulltype = kwargs['pulltype']
+        volume = kwargs['volume']
+        pulltype = kwargs['pulltype']
         if pulltype == 'redash':
             data_pull = RedashDataPipeline(volume)
         elif pulltype == 'rest':

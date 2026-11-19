@@ -309,10 +309,6 @@ class RESTDataPipeline(UsageDataPipelineBase):
     @record_process
     def produce_lab_dict(self):
         """Create dict of lab/volume combinations to collect and the volumes associated with them.
-        Parameters
-        ----------
-        vol : string
-            If not None, collect only allocations on the specified volume
         Returns
         -------
         labs_resources: dict
@@ -387,7 +383,6 @@ class RESTDataPipeline(UsageDataPipelineBase):
             projects = [t for t in to_collect if t[1] == volume]
             logger.debug('volume=%s to_collect_subset=%s', volume, projects)
 
-            ### OLD METHOD ###
             for lab, _, lab_volpath, cache_key in projects:
                 logger.debug('lab=%s volpath=%s', lab, lab_volpath)
                 usage_query = self.connection_obj.create_query(
@@ -431,7 +426,6 @@ class RESTDataPipeline(UsageDataPipelineBase):
             projects = [t for t in lab_res if t[1] == volume]
             logger.debug('volume=%s to_collect_subset=%s', volume, projects)
 
-            ### OLD METHOD ###
             for tup in projects:
                 p = tup[0]
                 lab_volpath = volumepath[0] if '_l3' not in p else volumepath[1]
