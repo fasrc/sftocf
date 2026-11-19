@@ -342,7 +342,7 @@ class RESTDataPipeline(UsageDataPipelineBase):
             data = usage_query.result
             if not data:
                 logger.warning('No starfish result for usage_query %s', usage_query)
-        except ValueError as err:
+        except (ValueError, TimeoutError) as err:
             logger.warning('error with query: %s', err)
             data = None
         return data

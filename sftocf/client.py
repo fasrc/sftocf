@@ -9,9 +9,9 @@ from coldfront.core.allocation.models import Allocation
 from coldfront.core.resource.models import Resource
 from coldfront.core.project.models import Project
 
-from sftocf.conf import SFURL
+from sftocf.conf import ASYNC_QUERY_TIMEOUT_SECONDS, SFURL
 from sftocf.signals import starfish_add_aduser, starfish_remove_aduser, starfish_add_adgroup
-from sftocf.utils import allocation_paths, get_allocation_path, get_resource_starfish_name, record_process, uniques_and_intersection
+from sftocf.utils import allocation_paths, get_resource_starfish_name, record_process, uniques_and_intersection
 
 logger = logging.getLogger(__name__)
 
@@ -485,10 +485,12 @@ class StarFishRedash:
 
 class AsyncQuery:
     def __init__(
-        self, headers, api_url, query, group_by, volpath, qformat='parent_path +aggrs.by_uid'
+        self, headers, api_url, query, group_by, volpath, qformat='parent_path +aggrs.by_uid',
+        timeout=ASYNC_QUERY_TIMEOUT_SECONDS,
     ):
         self.api_url = api_url
         self.headers = headers
+        self.timeout = timeout
         self.query_id = self.post_async_query(query, group_by, volpath, qformat=qformat)
         self._result = None
 
@@ -521,6 +523,7 @@ class AsyncQuery:
     def result(self):
         if self._result:
             return self._result
+        deadline = time.monotonic() + self.timeout
         while True:
             query_check_url = self.api_url + 'async/query/' + self.query_id
             response = return_get_json(query_check_url, self.headers)
@@ -530,6 +533,10 @@ class AsyncQuery:
                     raise ValueError(f'Error in starfish result:\n{result}')
                 self._result = result
                 return self._result
+            if time.monotonic() >= deadline:
+                raise TimeoutError(
+                    f'Starfish async query {self.query_id} did not complete within {self.timeout}s'
+                )
             time.sleep(3)
 
     def return_query_result(self):

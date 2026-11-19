@@ -226,3 +226,22 @@ class AsyncQueryPollingTests(SimpleTestCase):
         )
         with self.assertRaises(ValueError):
             query.result
+
+    @patch('sftocf.client.time.sleep', return_value=None)
+    @patch('sftocf.client.time.monotonic')
+    @patch('sftocf.client.return_get_json')
+    @patch('sftocf.client.return_post_json')
+    def test_raises_timeout_error_when_deadline_exceeded(
+        self, mock_post_json, mock_get_json, mock_monotonic, mock_sleep
+    ):
+        mock_post_json.return_value = {'query_id': 'q1'}
+        mock_get_json.return_value = {'is_done': False}
+        # one monotonic() call sets the deadline, the next is already past it
+        mock_monotonic.side_effect = [0, 100]
+        query = AsyncQuery(
+            headers={}, api_url='https://sf.example.com/api/',
+            query='q', group_by='g', volpath='vol:/path', timeout=10,
+        )
+        with self.assertRaises(TimeoutError):
+            query.result
+        mock_sleep.assert_not_called()

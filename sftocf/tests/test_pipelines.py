@@ -132,3 +132,9 @@ class ReturnUsageQueryDataTests(SimpleTestCase):
         usage_query = Mock()
         type(usage_query).result = PropertyMock(side_effect=ValueError('bad query'))
         self.assertIsNone(pipeline.return_usage_query_data(usage_query))
+
+    def test_returns_none_and_logs_on_timeout(self):
+        pipeline = _make_pipeline()
+        usage_query = Mock()
+        type(usage_query).result = PropertyMock(side_effect=TimeoutError('query took too long'))
+        self.assertIsNone(pipeline.return_usage_query_data(usage_query))
