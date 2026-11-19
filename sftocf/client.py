@@ -125,6 +125,7 @@ class StarFishServer:
         self.token = self.get_auth_token()
         self.headers = generate_headers(self.token)
         self.volumes = self.get_volume_names()
+        self._zones_cache = None
 
     @record_process
     def get_auth_token(self):
@@ -157,11 +158,21 @@ class StarFishServer:
         return groupnames
 
     def get_zones(self, zone_id=''):
-        """Get all zones from the API, or the zone with the corresponding ID
+        """Get all zones from the API, or the zone with the corresponding ID.
+
+        The full zone list (zone_id='') is cached for the lifetime of this
+        StarFishServer instance, since get_zone_by_name and callers that
+        touch many zones in a loop (e.g. update_zones.py) would otherwise
+        re-fetch the entire zone list once per zone. Every method that
+        creates, deletes, or updates a zone invalidates the cache.
         """
-        url = self.api_url + f'v2/zones/{zone_id}'
-        response = return_get_json(url, self.headers)
-        return response
+        if zone_id:
+            url = self.api_url + f'v2/zones/{zone_id}'
+            return return_get_json(url, self.headers)
+        if self._zones_cache is None:
+            url = self.api_url + 'v2/zones/'
+            self._zones_cache = return_get_json(url, self.headers)
+        return self._zones_cache
 
     def get_zone_by_name(self, zone_name):
         """Get a zone by name"""
@@ -181,6 +192,7 @@ class StarFishServer:
         logger.debug(data)
         response = return_post_json(url, data=data, headers=self.headers)
         logger.debug(response)
+        self._zones_cache = None
         if paths:
             self.update_zone_paths(response['id'], paths)
         return response
@@ -194,6 +206,7 @@ class StarFishServer:
         response = requests.delete(url, headers=self.headers)
         if response.status_code not in [204]:
             raise ValueError(f'Cannot delete zone {zone_name} ({zone_id}): {response.text}')
+        self._zones_cache = None
         return response
 
     def put_zone(self, zone_id, paths=(), managers=(), managing_groups=()):
@@ -205,6 +218,7 @@ class StarFishServer:
         data['managers'] = managers if managers else zone_data['managers']
         data['managing_groups'] = managing_groups if managing_groups else zone_data['managing_groups']
         response = return_put_json(url, data=data, headers=self.headers)
+        self._zones_cache = None
         return response
 
     def update_zone_members(
@@ -225,6 +239,7 @@ class StarFishServer:
             if admin_groups:
                 data["admins"]['groups'] = {'set': admin_groups}
         response = return_patch_json(url, data=data, headers=self.headers)
+        self._zones_cache = None
         return response
 
 
@@ -281,6 +296,7 @@ class StarFishServer:
                         logger.warning(
                             'Error adding path %s to zone %s: %s', path, zone['name'], e)
                         failed_paths.append(path)
+        self._zones_cache = None
         return failed_paths
 
     def get_zone_user_params(self, zone_id):
