@@ -231,9 +231,6 @@ class StarFishServer:
         zone_id = zone_data['id']
         for group in managing_groups:
             add_zone_group_to_ad(group['groupname'])
-        if managing_groups != ():
-            for group in managing_groups:
-                add_zone_group_to_ad(group['groupname'])
         if managing_groups != () or managers != ():
             self.update_zone_members(
                 zone_id, member_users=managers, member_groups=managing_groups
