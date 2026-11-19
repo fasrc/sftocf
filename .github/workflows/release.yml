@@ -1,0 +1,40 @@
+name: Release
+
+# Builds the sdist/wheel for a pushed vX.Y.Z tag and attaches them to the
+# matching GitHub Release (created with --generate-notes if it doesn't
+# already exist).
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build-and-release:
+    name: Build distributions and publish GitHub Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out sftocf
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build
+        run: python -m pip install build
+
+      - name: Build sdist and wheel
+        run: python -m build
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" dist/* \
+            --generate-notes \
+            --title "${{ github.ref_name }}" \
+            || gh release upload "${{ github.ref_name }}" dist/* --clobber
