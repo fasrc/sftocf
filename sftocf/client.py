@@ -66,29 +66,7 @@ def zone_report():
     report_nums = {k: len(v) for k, v in report.items()}
     for r in [report, report_nums]:
         logger.warning(r)
-
-def allocation_to_zone(allocation):
-    """
-    1. Check whether the allocation is in Starfish
-    2. If so, check whether a zone exists for the allocation's project.
-    3. If not, create a zone for the allocation's project.
-    4. Add the allocation to the zone.
-    """
-    server = StarFishServer()
-    resource = allocation.resources.first()
-    resource_name = get_resource_starfish_name(resource)
-    if not any(sf_res == resource_name for sf_res in server.volumes):
-        return None
-    project = allocation.project
-    zone = server.get_zone_by_name(project.title)
-    if zone:
-        zone_paths = zone['paths']
-        new_path = f"{resource_name}:{get_allocation_path(allocation)}"
-        zone_paths.append(new_path)
-        zone.update_zone(paths=zone_paths)
-    else:
-        zone = server.zone_from_project(project.title)
-    return zone
+    return report
 
 def add_zone_manager_to_ad(username):
     try:
