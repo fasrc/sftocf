@@ -19,7 +19,7 @@ from coldfront.config.base import DEBUG
 from coldfront.core.allocation.models import Allocation
 from coldfront.core.project.models import Project, ProjectAttributeType
 from coldfront.core.department.models import Department
-from sftocf.client import StarFishServer
+from sftocf.client import StarfishClient
 from sftocf.utils import allocation_paths, get_allocation_path
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ class Command(BaseCommand):
             'updated_zone_groups': []
         }
 
-        sf = StarFishServer()
+        sf = StarfishClient()
         starfish_zone_attr_type = ProjectAttributeType.objects.get(name='Starfish Zone')
         resources = sf.get_corresponding_coldfront_resources()
         # collect all projects that have active allocations on Starfish

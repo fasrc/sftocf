@@ -7,7 +7,7 @@ from django.dispatch import receiver
 from coldfront.core.allocation.signals import allocation_activate
 from coldfront.core.allocation.models import AllocationAttributeType
 
-from sftocf.client import StarFishServer
+from sftocf.client import StarfishClient
 from sftocf.pipelines import AllocationQueryMatch, RedashDataPipeline
 from sftocf.utils import determine_size_fmt, get_allocation_path, get_resource_starfish_name
 
@@ -20,7 +20,7 @@ def update_allocation(sender, **kwargs):
     logger.debug('allocation_activate signal received')
     allocation = kwargs['allocation_obj']
     volume_name = get_resource_starfish_name(allocation.resources.first())
-    server = StarFishServer()
+    server = StarfishClient()
     if volume_name not in server.volumes:
         logger.warning(
             'Allocation not in Starfish volumes; skipping allocation update. allocation_pk=%s volume=%s',

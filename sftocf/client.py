@@ -38,7 +38,7 @@ def zone_report():
         'zones_with_users': [],
     }
     # start by getting all zones
-    server = StarFishServer()
+    server = StarfishClient()
     # get list of all zones in server
     zones = server.get_zones()
 
@@ -90,7 +90,7 @@ def remove_zone_member_from_ad(username):
         raise
 
 
-class StarFishServer:
+class StarfishClient:
     """Class for interacting with StarFish REST API.
     """
 
@@ -136,7 +136,7 @@ class StarFishServer:
         """Get all zones from the API, or the zone with the corresponding ID.
 
         The full zone list (zone_id='') is cached for the lifetime of this
-        StarFishServer instance, since get_zone_by_name and callers that
+        StarfishClient instance, since get_zone_by_name and callers that
         touch many zones in a loop (e.g. update_zones.py) would otherwise
         re-fetch the entire zone list once per zone. Every method that
         creates, deletes, or updates a zone invalidates the cache.

@@ -1,27 +1,27 @@
-"""StarFishServer tests with HTTP/API calls mocked."""
+"""StarfishClient tests with HTTP/API calls mocked."""
 
 from unittest.mock import MagicMock, Mock, patch
 
 from django.test import SimpleTestCase, override_settings
 
-from sftocf.client import AsyncQuery, StarFishServer
+from sftocf.client import AsyncQuery, StarfishClient
 
 
 def _make_server():
-    """A StarFishServer with auth/volume discovery short-circuited."""
-    with patch('sftocf.client.StarFishServer.get_volume_names', return_value=[]), \
-         patch('sftocf.client.StarFishServer.get_auth_token', return_value='tok'):
-        return StarFishServer('https://sf.example.com')
+    """A StarfishClient with auth/volume discovery short-circuited."""
+    with patch('sftocf.client.StarfishClient.get_volume_names', return_value=[]), \
+         patch('sftocf.client.StarfishClient.get_auth_token', return_value='tok'):
+        return StarfishClient('https://sf.example.com')
 
 
 @override_settings(SFUSER='user', SFPASS='secret')
-class StarFishServerInitTests(SimpleTestCase):
+class StarfishClientInitTests(SimpleTestCase):
     """Avoid real network; patch auth and volume discovery."""
 
-    @patch('sftocf.client.StarFishServer.get_volume_names', return_value=['vol1', 'vol2'])
-    @patch('sftocf.client.StarFishServer.get_auth_token', return_value='tok')
+    @patch('sftocf.client.StarfishClient.get_volume_names', return_value=['vol1', 'vol2'])
+    @patch('sftocf.client.StarfishClient.get_auth_token', return_value='tok')
     def test_init_sets_api_url_and_volumes(self, _mock_token, _mock_vols):
-        sf = StarFishServer('https://starfish.example.com')
+        sf = StarfishClient('https://starfish.example.com')
         self.assertEqual(sf.name, 'https://starfish.example.com')
         self.assertEqual(sf.api_url, 'https://starfish.example.com/api/')
         self.assertEqual(sf.token, 'tok')
@@ -29,13 +29,13 @@ class StarFishServerInitTests(SimpleTestCase):
         self.assertEqual(sf.volumes, ['vol1', 'vol2'])
 
     @patch('sftocf.client.requests.post')
-    @patch('sftocf.client.StarFishServer.get_volume_names', return_value=[])
+    @patch('sftocf.client.StarfishClient.get_volume_names', return_value=[])
     def test_get_auth_token_posts_to_auth_endpoint(self, _mock_vols, mock_post):
         mock_resp = MagicMock()
         mock_resp.json.return_value = {'token': 'mytoken'}
         mock_post.return_value = mock_resp
 
-        sf = StarFishServer('https://sf.example.com')
+        sf = StarfishClient('https://sf.example.com')
         self.assertEqual(sf.token, 'mytoken')
         mock_post.assert_called_once()
         call_kw = mock_post.call_args
@@ -43,13 +43,13 @@ class StarFishServerInitTests(SimpleTestCase):
 
 
 class ZoneLookupTests(SimpleTestCase):
-    @patch('sftocf.client.StarFishServer.get_zones')
+    @patch('sftocf.client.StarfishClient.get_zones')
     def test_get_zone_by_name_found(self, mock_get_zones):
         mock_get_zones.return_value = [{'name': 'lab_a', 'id': 1}, {'name': 'lab_b', 'id': 2}]
         sf = _make_server()
         self.assertEqual(sf.get_zone_by_name('lab_b'), {'name': 'lab_b', 'id': 2})
 
-    @patch('sftocf.client.StarFishServer.get_zones')
+    @patch('sftocf.client.StarfishClient.get_zones')
     def test_get_zone_by_name_not_found(self, mock_get_zones):
         mock_get_zones.return_value = [{'name': 'lab_a', 'id': 1}]
         sf = _make_server()
@@ -57,7 +57,7 @@ class ZoneLookupTests(SimpleTestCase):
 
 
 class ZoneCachingTests(SimpleTestCase):
-    """get_zones() caches the full zone list per StarFishServer instance,
+    """get_zones() caches the full zone list per StarfishClient instance,
     so repeated lookups (e.g. get_zone_by_name called once per zone in a
     loop) don't each re-fetch every zone from the API."""
 
@@ -102,7 +102,7 @@ class ZoneCachingTests(SimpleTestCase):
 
 
 class CreateZoneTests(SimpleTestCase):
-    @patch('sftocf.client.StarFishServer.update_zone_paths')
+    @patch('sftocf.client.StarfishClient.update_zone_paths')
     @patch('sftocf.client.return_post_json')
     def test_posts_expected_payload_and_sets_paths(self, mock_post_json, mock_update_paths):
         mock_post_json.return_value = {'id': 99, 'name': 'newzone'}
@@ -114,7 +114,7 @@ class CreateZoneTests(SimpleTestCase):
         self.assertEqual(posted_data['members']['users'], [{'username': 'pi'}])
         mock_update_paths.assert_called_once_with(99, ['vol1:/a'])
 
-    @patch('sftocf.client.StarFishServer.update_zone_paths')
+    @patch('sftocf.client.StarfishClient.update_zone_paths')
     @patch('sftocf.client.return_post_json')
     def test_skips_path_update_when_no_paths(self, mock_post_json, mock_update_paths):
         mock_post_json.return_value = {'id': 5, 'name': 'emptyzone'}
@@ -140,7 +140,7 @@ class DeleteZoneTests(SimpleTestCase):
             sf.delete_zone(zone_id=7)
 
     @patch('sftocf.client.requests.delete')
-    @patch('sftocf.client.StarFishServer.get_zone_by_name')
+    @patch('sftocf.client.StarfishClient.get_zone_by_name')
     def test_delete_zone_looks_up_id_by_name_when_not_given(self, mock_lookup, mock_delete):
         mock_lookup.return_value = {'id': 42}
         mock_delete.return_value = Mock(status_code=204)
@@ -155,8 +155,8 @@ class UpdateZonePathsRetryTests(SimpleTestCase):
     by diffing against the zone's existing paths (removing stale ones, then
     adding new ones one at a time) rather than failing outright."""
 
-    @patch('sftocf.client.StarFishServer.get_zone_paths')
-    @patch('sftocf.client.StarFishServer.get_zones')
+    @patch('sftocf.client.StarfishClient.get_zone_paths')
+    @patch('sftocf.client.StarfishClient.get_zones')
     @patch('sftocf.client.return_patch_json')
     def test_falls_back_to_add_remove_when_bulk_set_fails(
         self, mock_patch_json, mock_get_zones, mock_get_zone_paths
@@ -177,8 +177,8 @@ class UpdateZonePathsRetryTests(SimpleTestCase):
             mock_patch_json.call_args_list[2].kwargs['data'], {'add': ['vol1:/new/path']}
         )
 
-    @patch('sftocf.client.StarFishServer.get_zone_paths')
-    @patch('sftocf.client.StarFishServer.get_zones')
+    @patch('sftocf.client.StarfishClient.get_zone_paths')
+    @patch('sftocf.client.StarfishClient.get_zones')
     @patch('sftocf.client.return_patch_json')
     def test_collects_paths_that_still_cannot_be_added(
         self, mock_patch_json, mock_get_zones, mock_get_zone_paths

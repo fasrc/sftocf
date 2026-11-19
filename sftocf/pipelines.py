@@ -12,7 +12,7 @@ from coldfront.core.allocation.models import (
     AllocationUserStatusChoice,
 )
 
-from sftocf.client import StarFishRedash, StarFishServer
+from sftocf.client import StarFishRedash, StarfishClient
 from sftocf.conf import DATAPATH, DATESTR, PENDING_ACTIVE_ALLOCATION_STATUSES, svp, username_ignore_list
 from sftocf.utils import (
     determine_size_fmt,
@@ -304,7 +304,7 @@ class RESTDataPipeline(UsageDataPipelineBase):
     """Collect data from Starfish's REST API to update Coldfront Allocations."""
 
     def return_connection_obj(self):
-        return StarFishServer()
+        return StarfishClient()
 
     @record_process
     def produce_lab_dict(self):
