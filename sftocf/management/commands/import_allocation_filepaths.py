@@ -3,7 +3,7 @@ import logging
 import pandas as pd
 from django.core.management.base import BaseCommand
 
-from coldfront.core.allocation.models import Allocation
+from coldfront.core.allocation.models import Allocation, AllocationAttributeType
 from sftocf.client import StarFishRedash, StarfishClient
 from sftocf.utils import get_allocation_path, get_resource_starfish_name
 from coldfront.core.utils.common import import_from_settings
@@ -30,6 +30,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **kwargs):
         errors = []
+        subdirectory_attrtype = AllocationAttributeType.objects.get(name='Subdirectory')
         redash = StarFishRedash()
         subdir_results = redash.submit_query("subdirectory")
         data = subdir_results['query_result']['data']['rows']
@@ -75,7 +76,7 @@ class Command(BaseCommand):
                 continue
             subdir_value = matched_paths[0]['path']
             allocation.allocationattribute_set.update_or_create(
-                allocation_attribute_type_id=8, defaults={'value': subdir_value}
+                allocation_attribute_type=subdirectory_attrtype, defaults={'value': subdir_value}
             )
             confirmation = f"added path to allocation {allocation.pk}: {subdir_value}"
             logger.info(confirmation)
