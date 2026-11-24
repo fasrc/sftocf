@@ -200,7 +200,8 @@ class UsageDataPipelineBase:
                 for d in obj.users_in_list(missing_username_list)
                 if d['username'] not in username_ignore_list
             ]
-            logger.warning('missing users detected: %s', missing_unames_metadata)
+            if missing_unames_metadata:
+                logger.warning('missing users detected: %s', missing_unames_metadata)
             for i in obj.users_in_list(missing_username_list):
                 obj.user_usage_entries.remove(i)
         return self.allocationquerymatches, user_models
