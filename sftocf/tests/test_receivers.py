@@ -1,9 +1,9 @@
-"""Tests for the allocation_set_zoneuserparam receiver."""
+"""Tests for the starfish_set_zone_userparam receiver."""
 from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
-from coldfront.core.allocation.signals import allocation_set_zoneuserparam
+from sftocf.signals import starfish_set_zone_userparam
 
 from sftocf import receivers
 
@@ -30,10 +30,10 @@ class UpdateStarfishZoneParamsTests(SimpleTestCase):
         self.assertEqual(result, 'ok')
 
     @patch('sftocf.receivers.StarfishClient')
-    def test_connected_to_allocation_set_zoneuserparam_signal(self, mock_client_cls):
+    def test_connected_to_starfish_set_zone_userparam_signal(self, mock_client_cls):
         mock_client = mock_client_cls.return_value
 
-        allocation_set_zoneuserparam.send(
+        starfish_set_zone_userparam.send(
             sender=self.__class__,
             zone_id='42',
             param_name='archive_globus_collection',
@@ -49,7 +49,7 @@ class UpdateStarfishZoneParamsTests(SimpleTestCase):
         """Not Globus-UUID-specific: any param_name/value can be pushed this way."""
         mock_client = mock_client_cls.return_value
 
-        allocation_set_zoneuserparam.send(
+        starfish_set_zone_userparam.send(
             sender=self.__class__,
             zone_id='7',
             param_name='some_other_param',
