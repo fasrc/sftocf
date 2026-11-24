@@ -428,7 +428,7 @@ class RESTDataPipeline(UsageDataPipelineBase):
             logger.debug('volume=%s to_collect_subset=%s', volume, projects)
 
             for lab, _, _ in projects:
-                lab_volpath = volumepath[0] if '_l3' not in lab else volumepath[1]
+                lab_volpath = volumepath[0]
                 logger.debug('lab=%s volpath=%s', lab, lab_volpath)
                 usage_query = self.connection_obj.create_query(
                     f'groupname={lab} type=d depth=1',
