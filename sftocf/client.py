@@ -282,9 +282,9 @@ class StarfishClient:
 
     def set_zone_user_param(self, zone_id, param_name, param_value):
         """Update zone user params via the API"""
-        url = self.api_url + f'v2/zones/{zone_id}/zone_user_params/{param_name}/'
-        data = param_value
-        response = return_patch_json(url, data=data, headers=self.headers)
+        url = self.api_url + f'v2/zones/{zone_id}/zone_user_params/{param_name}'
+        data = {'value': param_value}
+        response = return_put_json(url, data=data, headers=self.headers)
         return response
 
     def zone_from_department(self, department_obj):
