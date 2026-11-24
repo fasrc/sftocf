@@ -6,6 +6,13 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-11-24
+
+### Fixed
+- Fixed `StarfishClient.set_zone_user_param` sending a PATCH with the raw
+  value to a URL with a trailing slash; it now PUTs `{'value': ...}` to the
+  correct (non-trailing-slash) endpoint.
+
 ## [1.0.1] - 2026-11-24
 
 ### Added
@@ -50,6 +57,7 @@ Starfish REST/Redash integration:
 - Fixed a stale `STORAGE_RESOURCES` reference that could return stale
   results.
 
-[Unreleased]: https://github.com/fasrc/sftocf/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/fasrc/sftocf/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/fasrc/sftocf/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/fasrc/sftocf/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/fasrc/sftocf/releases/tag/v1.0.0
