@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.core.cache.backends.filebased import FileBasedCache
 from django.dispatch import receiver
 
-from coldfront.core.allocation.signals import allocation_activate
+from coldfront.core.allocation.signals import allocation_activate, allocation_set_zoneuserparam
 from coldfront.core.allocation.models import AllocationAttributeType
 from coldfront.core.resource.models import ResourceAttributeType
 from coldfront.core.resource.signals import update_volume_information
@@ -51,6 +51,21 @@ def _get_volume_stats(source):
         raise ValueError(f'unknown Starfish data source {source!r}')
     _volume_stats_cache.set(cache_key, volumes, _VOLUME_STATS_CACHE_SECONDS)
     return volumes
+
+
+@receiver(allocation_set_zoneuserparam)
+def update_starfish_zone_params(sender, **kwargs):
+    """Update a zone's zone_user_params.
+
+    Takes as kwargs the zone_id, the user_param name, and the user_param value
+    """
+    zone_id = kwargs['zone_id']
+    param_name = kwargs['param_name']
+    param_value = kwargs['param_value']
+
+    server = StarfishClient()
+    response = server.set_zone_user_param(zone_id, param_name, param_value)
+    return response
 
 
 @receiver(update_volume_information)
