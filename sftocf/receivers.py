@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.core.cache.backends.filebased import FileBasedCache
 from django.dispatch import receiver
 
-from coldfront.core.allocation.signals import allocation_activate, allocation_set_zoneuserparam
+from coldfront.core.allocation.signals import allocation_activate
 from coldfront.core.allocation.models import AllocationAttributeType
 from coldfront.core.resource.models import ResourceAttributeType
 from coldfront.core.resource.signals import update_volume_information
@@ -13,6 +13,7 @@ from coldfront.core.resource.signals import update_volume_information
 from sftocf.client import StarfishClient, StarFishRedash
 from sftocf.conf import DATAPATH
 from sftocf.pipelines import AllocationQueryMatch, RedashDataPipeline
+from sftocf.signals import starfish_set_zone_userparam
 from sftocf.utils import determine_size_fmt, get_allocation_path, get_resource_starfish_name
 
 logger = logging.getLogger(__name__)
@@ -53,7 +54,7 @@ def _get_volume_stats(source):
     return volumes
 
 
-@receiver(allocation_set_zoneuserparam)
+@receiver(starfish_set_zone_userparam)
 def update_starfish_zone_params(sender, **kwargs):
     """Update a zone's zone_user_params.
 
