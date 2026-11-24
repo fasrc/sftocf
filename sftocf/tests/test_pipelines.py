@@ -31,7 +31,7 @@ class CollectSfUserDataCacheTests(SimpleTestCase):
         self._cache_patch.start()
         # collect_sf_user_data only re-queries volumes present in svp['volumes'];
         # a cache miss falls through to that check, so it needs 'vol1' in it.
-        self._svp_patch = patch.object(pipelines, 'svp', {'volumes': {'vol1': ('/lab', '/lab_l3')}})
+        self._svp_patch = patch.object(pipelines, 'svp', {'volumes': {'vol1': ('/lab',)}})
         self._svp_patch.start()
 
     def tearDown(self):
@@ -121,7 +121,7 @@ class LabVolumePathsTests(SimpleTestCase):
     the volumes configured in SF_VOLUME_MAPPING."""
 
     def setUp(self):
-        self._svp_patch = patch.object(pipelines, 'svp', {'volumes': {'vol1': ('/lab', '/lab_l3')}})
+        self._svp_patch = patch.object(pipelines, 'svp', {'volumes': {'vol1': ('/lab',)}})
         self._svp_patch.start()
 
     def tearDown(self):
@@ -145,7 +145,7 @@ class CollectSfUsageDataTests(SimpleTestCase):
     the REST API's directory-query results."""
 
     def setUp(self):
-        self._svp_patch = patch.object(pipelines, 'svp', {'volumes': {'vol1': ('/lab', '/lab_l3')}})
+        self._svp_patch = patch.object(pipelines, 'svp', {'volumes': {'vol1': ('/lab',)}})
         self._svp_patch.start()
 
     def tearDown(self):

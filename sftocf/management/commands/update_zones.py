@@ -18,11 +18,27 @@ from django.core.management.base import BaseCommand
 from coldfront.config.base import DEBUG
 from coldfront.core.allocation.models import Allocation
 from coldfront.core.project.models import Project, ProjectAttributeType
-from coldfront.core.department.models import Department
 from sftocf.client import StarfishClient
+from sftocf.signals import starfish_zone_created
 from sftocf.utils import allocation_paths, get_allocation_path
 
 logger = logging.getLogger(__name__)
+
+try:
+    # coldfront.core.department is a FASRC-specific concept (it's built on
+    # their ifxuser/billing org-tree integration), not a universal coldfront
+    # app; degrade gracefully rather than failing to import, same as
+    # get_allocation_path does for Allocation.path in sftocf.utils. Unlike
+    # the signal cases elsewhere in this plugin, there's no generic
+    # sftocf-owned equivalent to fall back on here, so the department-zone
+    # section below is simply skipped on installs that lack it.
+    from coldfront.core.department.models import Department
+except ImportError:
+    Department = None
+    logger.info(
+        'coldfront.core.department is not available on this ColdFront install; '
+        'skipping department-level zone management.'
+    )
 class Command(BaseCommand):
     help = 'Add, update, and remove Starfish zones based on Coldfront projects'
 
@@ -47,7 +63,8 @@ class Command(BaseCommand):
             'added_zone_ids': [],
             'updated_zone_paths': [],
             'failed_zone_paths': [],
-            'updated_zone_groups': []
+            'updated_zone_groups': [],
+            'zone_created_receiver_errors': []
         }
 
         sf = StarfishClient()
@@ -56,7 +73,7 @@ class Command(BaseCommand):
         # collect all projects that have active allocations on Starfish
 
         # have zones for departments with more than 10 active projects
-        zoned_departments = [
+        zoned_departments = [] if Department is None else [
             dept for dept in Department.objects.all()
             if dept.get_projects().filter(status__name='Active').distinct().count() > 10
         ]
@@ -65,7 +82,7 @@ class Command(BaseCommand):
             z['name'] for z in sf.get_zones()
             if z['name'] in [f"{d.code}_Labs" for d in zoned_departments]
         ]
-        departments_with_zones = [
+        departments_with_zones = [] if Department is None else [
             d for d in Department.objects.all()
             if f"{d.code}_Labs" in starfish_zoned_department_names
         ]
@@ -231,6 +248,19 @@ class Command(BaseCommand):
                         value=zone['id'],
                     )
                     report['added_zone_ids'].append([proj_title, zone['id']])
+                    # let any interested plugin (e.g. an institution-specific one) react
+                    # to the new zone; this command stays agnostic to what they do with it
+                    responses = starfish_zone_created.send_robust(
+                        sender=self.__class__, project=project, zone_id=zone['id']
+                    )
+                    for receiver_fn, response in responses:
+                        if isinstance(response, Exception):
+                            logger.error(
+                                'Error in starfish_zone_created receiver %s for '
+                                'project=%s: %s', receiver_fn, proj_title, response
+                            )
+                            report['zone_created_receiver_errors'].append(
+                                [proj_title, str(receiver_fn)])
                 if err:
                     logger.error(err)
 

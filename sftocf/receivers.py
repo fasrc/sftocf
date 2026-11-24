@@ -2,16 +2,94 @@
 import logging
 
 from django.contrib.auth import get_user_model
+from django.core.cache.backends.filebased import FileBasedCache
 from django.dispatch import receiver
 
 from coldfront.core.allocation.signals import allocation_activate
 from coldfront.core.allocation.models import AllocationAttributeType
+from coldfront.core.resource.models import ResourceAttributeType
 
-from sftocf.client import StarfishClient
+from sftocf.client import StarfishClient, StarFishRedash
+from sftocf.conf import DATAPATH
 from sftocf.pipelines import AllocationQueryMatch, RedashDataPipeline
+from sftocf.signals import starfish_set_zone_userparam, starfish_update_volume_information
 from sftocf.utils import determine_size_fmt, get_allocation_path, get_resource_starfish_name
 
 logger = logging.getLogger(__name__)
+
+_volume_stats_cache = FileBasedCache(DATAPATH, {})
+_VOLUME_STATS_CACHE_SECONDS = 60 * 10
+
+
+def _get_volume_stats(source):
+    """Return {volume_name: {resource_attribute_name: value}}, from cache if fresh."""
+    cache_key = f'sftocf_volume_stats_{source}'
+    volumes = _volume_stats_cache.get(cache_key)
+    if volumes is not None:
+        return volumes
+    if source == 'rest_api':
+        raw_volumes = StarfishClient().get_volume_attributes()
+        volumes = {
+            v['vol']: {
+                'capacity_tb': v['total_capacity'] / (1024 ** 4),
+                'free_tb': v['free_space'] / (1024 ** 4),
+                'used_tb': (v['total_capacity'] - v['free_space']) / (1024 ** 4),
+                'file_count': v.get('number_of_files'),
+            } for v in raw_volumes
+        }
+    elif source == 'redash':
+        raw_volumes = StarFishRedash().get_vol_stats()
+        volumes = {
+            v['vol']: {
+                'capacity_tb': v['capacity_TB'],
+                'free_tb': v['free_TB'],
+                'used_tb': v['used_physical_TB'],
+                'file_count': v['number_of_files'],
+            } for v in raw_volumes
+        }
+    else:
+        raise ValueError(f'unknown Starfish data source {source!r}')
+    _volume_stats_cache.set(cache_key, volumes, _VOLUME_STATS_CACHE_SECONDS)
+    return volumes
+
+
+@receiver(starfish_set_zone_userparam)
+def update_starfish_zone_params(sender, **kwargs):
+    """Update a zone's zone_user_params.
+
+    Takes as kwargs the zone_id, the user_param name, and the user_param value
+    """
+    zone_id = kwargs['zone_id']
+    param_name = kwargs['param_name']
+    param_value = kwargs['param_value']
+
+    server = StarfishClient()
+    response = server.set_zone_user_param(zone_id, param_name, param_value)
+    return response
+
+
+@receiver(starfish_update_volume_information)
+def update_starfish_volume_information(sender, **kwargs):
+    """Update a Resource's capacity/usage ResourceAttributes from Starfish.
+    """
+    resource = kwargs['resource']
+    source = kwargs.get('source') or 'redash'
+    volume_name = get_resource_starfish_name(resource)
+    attrs = _get_volume_stats(source).get(volume_name)
+    if not attrs:
+        logger.debug(
+            'no Starfish data found for resource; skipping. resource=%s volume=%s source=%s',
+            resource.name, volume_name, source
+        )
+        return
+    for attr_name, attr_val in attrs.items():
+        if attr_val:
+            attr_type_obj = ResourceAttributeType.objects.get(name=attr_name)
+            resource.resourceattribute_set.update_or_create(
+                resource_attribute_type=attr_type_obj,
+                defaults={'value': attr_val}
+            )
+    return 'sftocf'
 
 
 @receiver(allocation_activate)
