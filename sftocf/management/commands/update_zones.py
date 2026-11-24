@@ -20,6 +20,7 @@ from coldfront.core.allocation.models import Allocation
 from coldfront.core.project.models import Project, ProjectAttributeType
 from coldfront.core.department.models import Department
 from sftocf.client import StarfishClient
+from sftocf.signals import starfish_zone_created
 from sftocf.utils import allocation_paths, get_allocation_path
 
 logger = logging.getLogger(__name__)
@@ -47,7 +48,8 @@ class Command(BaseCommand):
             'added_zone_ids': [],
             'updated_zone_paths': [],
             'failed_zone_paths': [],
-            'updated_zone_groups': []
+            'updated_zone_groups': [],
+            'zone_created_receiver_errors': []
         }
 
         sf = StarfishClient()
@@ -231,6 +233,19 @@ class Command(BaseCommand):
                         value=zone['id'],
                     )
                     report['added_zone_ids'].append([proj_title, zone['id']])
+                    # let any interested plugin (e.g. an institution-specific one) react
+                    # to the new zone; this command stays agnostic to what they do with it
+                    responses = starfish_zone_created.send_robust(
+                        sender=self.__class__, project=project, zone_id=zone['id']
+                    )
+                    for receiver_fn, response in responses:
+                        if isinstance(response, Exception):
+                            logger.error(
+                                'Error in starfish_zone_created receiver %s for '
+                                'project=%s: %s', receiver_fn, proj_title, response
+                            )
+                            report['zone_created_receiver_errors'].append(
+                                [proj_title, str(receiver_fn)])
                 if err:
                     logger.error(err)
 

@@ -5,3 +5,6 @@ import django.dispatch
 starfish_add_aduser = django.dispatch.Signal()
 starfish_remove_aduser = django.dispatch.Signal()
 starfish_add_adgroup = django.dispatch.Signal()
+starfish_zone_created = django.dispatch.Signal()
+    #providing_args=["project", "zone_id"]
+    # sent when update_zones creates a new per-project Starfish zone
