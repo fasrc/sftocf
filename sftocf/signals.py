@@ -13,3 +13,6 @@ starfish_set_zone_userparam = django.dispatch.Signal()
     #providing_args=["zone_id", "param_name", "param_value"]
     # generic hook for setting a zone's user_param; callers (e.g. institution-
     # specific plugins) resolve zone_id/param_name/param_value themselves
+
+starfish_update_volume_information = django.dispatch.Signal()
+    #providing_args=["resource", "source"]

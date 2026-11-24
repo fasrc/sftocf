@@ -8,12 +8,11 @@ from django.dispatch import receiver
 from coldfront.core.allocation.signals import allocation_activate
 from coldfront.core.allocation.models import AllocationAttributeType
 from coldfront.core.resource.models import ResourceAttributeType
-from coldfront.core.resource.signals import update_volume_information
 
 from sftocf.client import StarfishClient, StarFishRedash
 from sftocf.conf import DATAPATH
 from sftocf.pipelines import AllocationQueryMatch, RedashDataPipeline
-from sftocf.signals import starfish_set_zone_userparam
+from sftocf.signals import starfish_set_zone_userparam, starfish_update_volume_information
 from sftocf.utils import determine_size_fmt, get_allocation_path, get_resource_starfish_name
 
 logger = logging.getLogger(__name__)
@@ -69,15 +68,9 @@ def update_starfish_zone_params(sender, **kwargs):
     return response
 
 
-@receiver(update_volume_information)
+@receiver(starfish_update_volume_information)
 def update_starfish_volume_information(sender, **kwargs):
     """Update a Resource's capacity/usage ResourceAttributes from Starfish.
-
-    Connects to coldfront.core.resource.signals.update_volume_information so
-    callers (e.g. pull_resource_data) never need to import sftocf directly;
-    mirrors coldfront.plugins.isilon.signals.update_isilon_volume_information
-    for Starfish-backed resources. Silently does nothing for a resource
-    Starfish has no data for (e.g. one owned by another storage backend).
     """
     resource = kwargs['resource']
     source = kwargs.get('source') or 'redash'
